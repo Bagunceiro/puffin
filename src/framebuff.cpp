@@ -67,7 +67,7 @@ size_t FrameBuffer::write(uint8_t c)
 {
     if (c == '\n')
     {
-        Serial.println("NewLine");
+        // Serial.println("NewLine");
         if (cury < rows)
         {
             cury++;

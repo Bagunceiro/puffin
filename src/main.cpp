@@ -8,6 +8,8 @@
 #include <PZEM004Tv30.h>
 #include <LiquidCrystal_I2C.h>
 #include <ArduinoJson.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 
 #include "framebuff.h"
 
@@ -17,6 +19,8 @@
 
 PZEM004Tv30 pzem(14, 12);
 extern LiquidCrystal_I2C lcd;
+extern void wssetup();
+extern AsyncEventSource events;
 
 WiFiClient mqttWifiClient;
 PubSubClient mqttClient(mqttWifiClient);
@@ -24,7 +28,7 @@ PubSubClient mqttClient(mqttWifiClient);
 int wifiattemptcount = 0;
 const int WIFI_CONNECT_ATTEMPT_PAUSE = 15000;
 
-FrameBuffer fb(20,10);
+FrameBuffer fb(20, 10);
 
 void wpsInit()
 {
@@ -96,16 +100,15 @@ bool mqttpoll()
 }
 
 const char antenna[8] =
-{
-    0b10101,
-    0b10101,
-    0b01110,
-    0b00100,
-    0b00100,
-    0b00100,
-    0b00000,
-    0b00000
-};
+    {
+        0b10101,
+        0b10101,
+        0b01110,
+        0b00100,
+        0b00100,
+        0b00100,
+        0b00000,
+        0b00000};
 
 extern void checkMenu();
 extern MenuEntry menuRoot;
@@ -125,142 +128,185 @@ void setup()
     menuRoot.buildmenu();
     menuRoot.dump();
     lcd.display();
+    wssetup();
 }
 
-long sigFigs(const long val, unsigned int numFigs)
+char *sigfigs(const float val, const int figs, char *buffer)
 {
-    char buffer[16];
-    sprintf(buffer, "%ld", val);
-
-    for (uint8_t i = numFigs + 1; i < strlen(buffer); i++)
-    {
-        buffer[i] = '0';
-    }
-    long result;
-    sscanf(buffer, "%ld", &result);
-    return result;
+    int oom;
+    if (val == 0)
+        oom = 0;
+    else
+        oom = floorf(log10f(val));
+    int ndp = figs - oom - 1;
+    float scale = powf(10, ndp);
+    float result = roundf(val * scale) / scale;
+    if (ndp < 0)
+        ndp = 0;
+    char formatstr[6];
+    sprintf(formatstr, "%%.%df", ndp);
+    sprintf(buffer, formatstr, result);
+    return buffer;
 }
 
 void blankField(const int col, const int row, const int length)
 {
-    for (int i = 0; i < length; i++) lcd.print(' ');
+    for (int i = 0; i < length; i++)
+        lcd.print(' ');
 }
 
-void displayField(const int col, const int row, const int length, float value, uint8_t dp, const char *suffix)
+void displayField(const int col, const int row, const int length, const char *value)
 {
     fb.setCursor(col, row);
 
-    char buffer[length + 1];
-    snprintf(buffer, length, "%%.%df%%s", dp);
-    // Serial.println(buffer);
+    int l = strlen(value);
+    for (int i = 0; i < length; i++)
+    {
+        if (i < l)
+        {
+            fb.print(value[i]);
+        }
+        else
+            fb.print(' ');
+    }
+}
 
-    char buffer2[length + 1];
-    snprintf(buffer2, length, buffer, value, suffix);
-    // Serial.println(buffer2);
-    fb.print(buffer2);
-    for (int i = strlen(buffer2); i < length; i++) fb.print(" ");
+bool wifiConnected = false;
+
+void doMeasurements()
+{
+    static time_t then = 0;
+    time_t now = millis();
+    uint16_t sincethen = now - then;
+    if ((then == 0) || (sincethen > 1000))
+    {
+        then = now;
+        float v = pzem.voltage();
+        float a = pzem.current();
+        float w = pzem.power();
+        float hz = pzem.frequency();
+        float pf = pzem.pf();
+
+        // *************
+        // Test Values
+        v = (1295 + random(10)) / 10.0;
+        a = (800.0 + random(300)) / 1000;
+        pf = (85 + random(10)) / 100.0;
+        hz = (590 + random(10)) / 10.0;
+        w = v * a * pf;
+        // *************
+
+        float va = v * a;
+
+        if (isnan(v))
+            v = 0;
+        if (isnan(a))
+            a = 0;
+        if (isnan(w))
+            w = 0;
+        if (isnan(hz))
+            hz = 0;
+        if (isnan(pf))
+            pf = 1;
+        if (isnan(va))
+            va = 0;
+
+        char v_s[8];
+        char a_s[8];
+        char w_s[8];
+        char hz_s[8];
+        char pf_s[8];
+        char va_s[8];
+
+        sigfigs(v, 4, v_s);
+        sigfigs(a, 3, a_s);
+        sigfigs(w, 3, w_s);
+        sigfigs(pf, 2, pf_s);
+        sigfigs(hz, 3, hz_s);
+        sigfigs(va, 3, va_s);
+
+        StaticJsonDocument<512> doc;
+        doc["V"] = v_s;
+        doc["A"] = a_s;
+        doc["W"] = w_s;
+        doc["VA"] = va_s;
+        doc["Hz"] = hz_s;
+        doc["PF"] = pf_s;
+        String s;
+        serializeJson(doc, s);
+        mqttClient.publish("powermeter/data", s.c_str());
+        events.send("ping", NULL, millis());
+
+        char const *asuf = "A";
+        if (a < 1)
+        {
+            sigfigs(a * 1000, 3, a_s);
+            asuf = "mA";
+        }
+        char const *wsuf = "W";
+        if (w < 1)
+        {
+            sigfigs(w * 1000, 3, w_s);
+            wsuf = "mW";
+        }
+
+        char ds[12];
+        const char *fmt = "%6s %s";
+        snprintf(ds, 10, fmt, v_s, "V");
+        displayField(0, 1, 10, ds);
+        events.send(ds, "voltage", millis());
+        snprintf(ds, 10, fmt, a_s, asuf);
+        displayField(0, 2, 10, ds);
+        events.send(ds, "current", millis());
+        snprintf(ds, 10, fmt, w_s, wsuf);
+        displayField(0, 3, 10, ds);
+        events.send(ds, "power", millis());
+        snprintf(ds, 10, fmt, hz_s, "Hz");
+        displayField(10, 1, 10, ds);
+        events.send(ds, "frequency", millis());
+        snprintf(ds, 10, fmt, pf_s, "PF");
+        displayField(10, 2, 10, ds);
+        events.send(ds, "power factor", millis());
+        snprintf(ds, 10, fmt, va_s, "VA");
+        displayField(10, 3, 10, ds);
+        events.send(ds, "ap power", millis());
+
+        fb.setCursor(18, 0);
+        fb.write(mqttConnected ? 'M' : ' ');
+        fb.write(wifiConnected ? byte(0) : ' ');
+        fb.display(lcd);
+    }
 }
 
 void loop()
 {
-    bool wifiConnected = false;
+    wifiConnected = false;
+    static bool wasWiFiConnected = false;
 
     if (WiFi.status() == WL_CONNECTED)
     {
         wifiConnected = true;
+        if (!wasWiFiConnected)
+        {
+            wasWiFiConnected = true;
+            Serial.printf("WiFi Connected - IP %s\n", WiFi.localIP().toString().c_str());
+        }
         mqttpoll();
     }
     else
     {
-        static unsigned long then = millis();
+        static unsigned long then = 0;
         unsigned long sinceThen = millis() - then;
-        if (sinceThen > 5000)
+        if ((sinceThen > 5000) || (then == 0))
         {
             WiFi.begin("asgard_2g", "enaLkraP");
             then = millis();
         }
+        if (wasWiFiConnected)
+        {
+            wasWiFiConnected = false;
+            Serial.printf("WiFi Connection lost\n");
+        }
     }
-
-    int vScale = 1;
-    int aScale = 1000;
-    int wScale = 1000;
-    int kwhScale = 1000;
-    int hzScale = 10;
-    int pfScale = 100;
-
-    float vf = pzem.voltage();
-    float af = pzem.current();
-    float wf = pzem.power();
-    float kwhf = pzem.energy();
-    float hzf = pzem.frequency();
-    float pff = pzem.pf();
-
-    int voltage = (isnan(vf) ? 0 : vf * vScale);
-    float v = ((float)sigFigs(voltage, 3)) / vScale;
-    
-    int current = (isnan(af) ? 0 : af * aScale);
-    float a = ((float)sigFigs(current, 3)) / aScale;
-    
-    int power = (isnan(af) ? 0 : wf * wScale);
-    float w = ((float)sigFigs(power, 3)) / wScale;
-
-    int energy = (isnan(af) ? 0 : kwhf * kwhScale);
-    float kwh = ((float)sigFigs(energy, 3)) / kwhScale;
-
-    int frequency = (isnan(hzf) ? 0 : hzf * hzScale);
-    float hz = ((float)sigFigs(frequency, 2)) / hzScale;
-    
-    int powerFactor = (isnan(pff) ? 0 : pff * pfScale);
-    float pf = ((float)sigFigs(powerFactor, 2)) / pfScale;
-
-    StaticJsonDocument<512> doc;
-    doc["V"] = v;
-    doc["A"] = a;
-    doc["W"] = w;
-    doc["kWh"] = kwh;
-    doc["Hz"] = hz;
-    doc["PF"] = pf;
-    String s;
-    serializeJson(doc, s);
-    // Serial.println(s);
-    mqttClient.publish("powermeter/data", s.c_str());
-
-    const char *asuff = " A";
-    uint8_t adp = 3;
-    if (a < 1000)
-    {
-        a *= 1000;
-        asuff = " mA";
-        adp = 0;
-    }
-    const char *kwhsuff = " kWh";
-    uint8_t kwhdp = 3;
-    if (kwh < 1000)
-    {
-        kwh *= 1000;
-        kwhsuff = " Wh";
-        kwhdp = 0;
-    }
-    const char *wsuff = " W";
-    uint8_t wdp = 3;
-    if (w < 1000)
-    {
-        w *= 1000;
-        wsuff = " mW";
-        wdp = 0;
-    }
-
-    displayField(0, 1, 10, v, 1, "V");
-    displayField(0, 2, 10, a, adp, asuff);
-    displayField(0, 3, 10, w, wdp, wsuff);
-    displayField(10, 1, 10, hz, 1, " Hz");
-    displayField(10, 2, 10, pf, 2, " PF");
-    displayField(10, 3, 10, kwh, kwhdp, kwhsuff);
-
-
-    fb.setCursor(18,0);
-    fb.write(mqttConnected ? 'M' : ' ');
-    fb.write(wifiConnected ? byte(0) : ' ');
-    fb.display(lcd);
-    delay(1000);
+    doMeasurements();
 }

@@ -1,5 +1,5 @@
-#include "menu.h"
 #include <ArduinoJson.h>
+#include "menu.h"
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
@@ -236,7 +236,7 @@ void MenuEntry::output(FrameBuffer& fb)
 {
   fb.clear();
   fb.setTitle(name);
-  for (int i = 0; i < entries.size(); i++)
+  for (unsigned int i = 0; i < entries.size(); i++)
   {
     fb.print(' ');
     fb.print(entries[i].name);
