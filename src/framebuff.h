@@ -7,7 +7,7 @@ class FrameBuffer : public Stream
     public:
     FrameBuffer(uint8_t c, uint8_t r);
     virtual ~FrameBuffer();
-    void clear();
+    void clear(uint8_t buff = 0);
     bool display(LiquidCrystal_I2C& lcd);
 
     void setCursor(uint8_t col, uint8_t row) { curx = col, cury = row; }
@@ -30,7 +30,7 @@ class FrameBuffer : public Stream
     uint8_t offsetrow;
     uint8_t curx;
     uint8_t cury;   
-    char **charArray;
+    char **charArray[2];
 
     bool fixedTitle;
 };

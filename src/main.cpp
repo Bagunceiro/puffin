@@ -12,6 +12,8 @@
 #include <ESPAsyncWebServer.h>
 
 #include "framebuff.h"
+#include "analogkeypad.h"
+#include "timedevent.h"
 
 #include "menu.h"
 
@@ -21,6 +23,7 @@ PZEM004Tv30 pzem(14, 12);
 extern LiquidCrystal_I2C lcd;
 extern void wssetup();
 extern AsyncEventSource events;
+bool wifiConnected = false;
 
 WiFiClient mqttWifiClient;
 PubSubClient mqttClient(mqttWifiClient);
@@ -113,22 +116,20 @@ const char antenna[8] =
 extern void checkMenu();
 extern MenuEntry menuRoot;
 
-void setup()
+void displayField(const int col, const int row, const int length, const char *value)
 {
-    Serial.begin(9600);
-    Wire.begin(4, 5);
-    lcd.init();
-    lcd.backlight();
+    fb.setCursor(col, row);
 
-    WiFi.mode(WIFI_STA);
-
-    lcd.createChar(0, antenna);
-
-    Screen::build();
-    menuRoot.buildmenu();
-    menuRoot.dump();
-    lcd.display();
-    wssetup();
+    int l = strlen(value);
+    for (int i = 0; i < length; i++)
+    {
+        if (i < l)
+        {
+            fb.print(value[i]);
+        }
+        else
+            fb.print(' ');
+    }
 }
 
 char *sigfigs(const float val, const int figs, char *buffer)
@@ -149,134 +150,153 @@ char *sigfigs(const float val, const int figs, char *buffer)
     return buffer;
 }
 
+void doMeasurements(void *)
+{
+    // pzem.updateValues();
+
+    float v = pzem.voltage();
+    float a = pzem.current();
+    float hz = pzem.frequency();
+    float pf = pzem.pf();
+
+    // *************
+    // Test Values
+    //v  = (1295 + random(10)) / 10.0;
+    a  = (800.0 + random(300)) / 1000;
+    pf = (85 + random(10)) / 100.0;
+    //hz = (590 + random(10)) / 10.0;
+
+    // *************
+
+    float w = v * a * pf;
+    float va = v * a;
+
+    if (isnan(v))
+        v = 0;
+    if (isnan(a))
+        a = 0;
+    if (isnan(w))
+        w = 0;
+    if (isnan(hz))
+        hz = 0;
+    if (isnan(pf))
+        pf = 1;
+    if (isnan(va))
+        va = 0;
+
+    char v_s[8];
+    char a_s[8];
+    char w_s[8];
+    char hz_s[8];
+    char pf_s[8];
+    char va_s[8];
+
+    sigfigs(v, 4, v_s);
+    sigfigs(a, 3, a_s);
+    sigfigs(w, 3, w_s);
+    sigfigs(pf, 2, pf_s);
+    sigfigs(hz, 3, hz_s);
+    sigfigs(va, 3, va_s);
+
+
+    StaticJsonDocument<512> doc;
+    doc["V"] = v_s;
+    doc["A"] = a_s;
+    doc["W"] = w_s;
+    doc["VA"] = va_s;
+    doc["Hz"] = hz_s;
+    doc["PF"] = pf_s;
+    String s;
+    serializeJson(doc, s);
+    mqttClient.publish("powermeter/data", s.c_str());
+    events.send("ping", NULL, millis());
+
+    char const *asuf = "A";
+    if (a < 1)
+    {
+        sigfigs(a * 1000, 3, a_s);
+        asuf = "mA";
+    }
+    char const *wsuf = "W";
+    if (w < 1)
+    {
+        sigfigs(w * 1000, 3, w_s);
+        wsuf = "mW";
+    }
+
+    char ds[12];
+    const char *fmt = "%6s %s";
+    snprintf(ds, 10, fmt, v_s, "V");
+    displayField(0, 1, 10, ds);
+    events.send(ds, "voltage", millis());
+    snprintf(ds, 10, fmt, a_s, asuf);
+    displayField(0, 2, 10, ds);
+    events.send(ds, "current", millis());
+    snprintf(ds, 10, fmt, w_s, wsuf);
+    displayField(0, 3, 10, ds);
+    events.send(ds, "power", millis());
+    snprintf(ds, 10, fmt, hz_s, "Hz");
+    displayField(10, 1, 10, ds);
+    events.send(ds, "frequency", millis());
+    snprintf(ds, 10, fmt, pf_s, "PF");
+    displayField(10, 2, 10, ds);
+    events.send(ds, "power factor", millis());
+    snprintf(ds, 10, fmt, va_s, "VA");
+    displayField(10, 3, 10, ds);
+    events.send(ds, "ap power", millis());
+
+    fb.setCursor(18, 0);
+    fb.write(mqttConnected ? 'M' : ' ');
+    fb.write(wifiConnected ? byte(0) : ' ');
+    fb.display(lcd);
+}
+
+void keyup(uint8_t k)
+{
+    Serial.printf("Key %d released\n", k);
+}
+
+void keydown(uint8_t k)
+{
+    Serial.printf("Key %d pressed\n", k);
+}
+
+AnalogKeyPad kpad(keydown, keyup);
+
+void kpadloop(void *)
+{
+    kpad.poll();
+}
+
+void setup()
+{
+    Serial.begin(9600);
+    Wire.begin(4, 5);
+    lcd.init();
+    lcd.backlight();
+
+    WiFi.mode(WIFI_STA);
+
+    lcd.createChar(0, antenna);
+
+    Screen::build();
+    menuRoot.buildmenu();
+    menuRoot.dump();
+    lcd.display();
+    wssetup();
+    TimedEvent t("measurements", doMeasurements, 1000);
+    t.start();
+    TimedEvent t2("kpad", kpadloop, 20);
+    t2.start();
+}
+
+/*
 void blankField(const int col, const int row, const int length)
 {
     for (int i = 0; i < length; i++)
         lcd.print(' ');
 }
-
-void displayField(const int col, const int row, const int length, const char *value)
-{
-    fb.setCursor(col, row);
-
-    int l = strlen(value);
-    for (int i = 0; i < length; i++)
-    {
-        if (i < l)
-        {
-            fb.print(value[i]);
-        }
-        else
-            fb.print(' ');
-    }
-}
-
-bool wifiConnected = false;
-
-void doMeasurements()
-{
-    static time_t then = 0;
-    time_t now = millis();
-    uint16_t sincethen = now - then;
-    if ((then == 0) || (sincethen > 1000))
-    {
-        then = now;
-        float v = pzem.voltage();
-        float a = pzem.current();
-        float w = pzem.power();
-        float hz = pzem.frequency();
-        float pf = pzem.pf();
-
-        // *************
-        // Test Values
-        v = (1295 + random(10)) / 10.0;
-        a = (800.0 + random(300)) / 1000;
-        pf = (85 + random(10)) / 100.0;
-        hz = (590 + random(10)) / 10.0;
-        w = v * a * pf;
-        // *************
-
-        float va = v * a;
-
-        if (isnan(v))
-            v = 0;
-        if (isnan(a))
-            a = 0;
-        if (isnan(w))
-            w = 0;
-        if (isnan(hz))
-            hz = 0;
-        if (isnan(pf))
-            pf = 1;
-        if (isnan(va))
-            va = 0;
-
-        char v_s[8];
-        char a_s[8];
-        char w_s[8];
-        char hz_s[8];
-        char pf_s[8];
-        char va_s[8];
-
-        sigfigs(v, 4, v_s);
-        sigfigs(a, 3, a_s);
-        sigfigs(w, 3, w_s);
-        sigfigs(pf, 2, pf_s);
-        sigfigs(hz, 3, hz_s);
-        sigfigs(va, 3, va_s);
-
-        StaticJsonDocument<512> doc;
-        doc["V"] = v_s;
-        doc["A"] = a_s;
-        doc["W"] = w_s;
-        doc["VA"] = va_s;
-        doc["Hz"] = hz_s;
-        doc["PF"] = pf_s;
-        String s;
-        serializeJson(doc, s);
-        mqttClient.publish("powermeter/data", s.c_str());
-        events.send("ping", NULL, millis());
-
-        char const *asuf = "A";
-        if (a < 1)
-        {
-            sigfigs(a * 1000, 3, a_s);
-            asuf = "mA";
-        }
-        char const *wsuf = "W";
-        if (w < 1)
-        {
-            sigfigs(w * 1000, 3, w_s);
-            wsuf = "mW";
-        }
-
-        char ds[12];
-        const char *fmt = "%6s %s";
-        snprintf(ds, 10, fmt, v_s, "V");
-        displayField(0, 1, 10, ds);
-        events.send(ds, "voltage", millis());
-        snprintf(ds, 10, fmt, a_s, asuf);
-        displayField(0, 2, 10, ds);
-        events.send(ds, "current", millis());
-        snprintf(ds, 10, fmt, w_s, wsuf);
-        displayField(0, 3, 10, ds);
-        events.send(ds, "power", millis());
-        snprintf(ds, 10, fmt, hz_s, "Hz");
-        displayField(10, 1, 10, ds);
-        events.send(ds, "frequency", millis());
-        snprintf(ds, 10, fmt, pf_s, "PF");
-        displayField(10, 2, 10, ds);
-        events.send(ds, "power factor", millis());
-        snprintf(ds, 10, fmt, va_s, "VA");
-        displayField(10, 3, 10, ds);
-        events.send(ds, "ap power", millis());
-
-        fb.setCursor(18, 0);
-        fb.write(mqttConnected ? 'M' : ' ');
-        fb.write(wifiConnected ? byte(0) : ' ');
-        fb.display(lcd);
-    }
-}
+*/
 
 void loop()
 {
@@ -308,5 +328,5 @@ void loop()
             Serial.printf("WiFi Connection lost\n");
         }
     }
-    doMeasurements();
+    TimedEvent::poll();
 }
