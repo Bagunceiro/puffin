@@ -72,6 +72,14 @@ enum MenuEntryType {
     CHECK_TYPE
 };
 
+typedef const char *charset;
+struct keyset_t
+{
+  charset set[4];
+  int nsets;
+  bool findKey(unsigned char k, int& set, int& pos);
+};
+
 class MenuEntry
 {
 public:
@@ -102,6 +110,9 @@ public:
     void reset();
     String content;
     uint8_t pos;
+    keyset_t* keyboard;
+    int keyset;
+    int keysetpos;
 
 private:
     MenuEntryType type;

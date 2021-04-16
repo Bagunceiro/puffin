@@ -15,12 +15,41 @@ MenuEntry menuRoot;
 extern BreadCrumb navigation;
 extern FrameBuffer fb;
 
-typedef const char *charset;
-struct keyboard
+#define ADD_KEY_LLEFT 11
+#define ADD_KEY_LRIGHT 12
+
+charset ALPHA_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+charset alpha_chars = "abcdefghijklmnopqrstuvwxyz";
+charset num_chars = "0123456789";
+charset punc_chars = " !\"#$%&'()*+,-./:;<=>?[\\]^_{|}~";
+
+keyset_t num_keyset = {{num_chars}, 1};
+keyset_t text_keyset = {{alpha_chars, ALPHA_chars, num_chars, punc_chars}, 4};
+
+bool keyset_t::findKey(unsigned char k, int &s, int &p)
 {
-  charset sets[4];
-  int nsets;
-};
+  bool found = false;
+  for (s = 0; s < nsets; s++)
+  {
+    unsigned char c;
+    for (p = 0; (c = set[s][p]) != '\00'; p++)
+    {
+      if (c == k)
+      {
+        found = true;
+        break;
+      }
+    }
+    if (found)
+      break;
+  }
+  if (!found)
+  {
+    s = 0;
+    p = 0;
+  }
+  return found;
+}
 
 void menuAdd(MenuEntry *m)
 {
@@ -37,14 +66,6 @@ void menuRemove()
     m->reset();
   }
 }
-
-charset ALPHA_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-charset alpha_chars = "abcdefghijklmnopqrstuvwxyz";
-charset num_chars = "0123456789";
-charset punc_chars = " !\"#$%&'()*+,-./:;<=>?[\\]^_{|}~";
-
-keyboard textkeyboard = {{ALPHA_chars, alpha_chars, num_chars, punc_chars}, 4};
-keyboard numkeyboard = {{num_chars}, 1};
 
 void dumpScreens()
 {
@@ -103,6 +124,9 @@ MenuEntry::MenuEntry()
   pos = 0;
   content = "testing";
   setType(MISC_TYPE);
+  keyset = 0;
+  keysetpos = 0;
+  keyboard = NULL;
 }
 
 void MenuEntry::build(JsonObject &obj)
@@ -138,9 +162,15 @@ void MenuEntry::build(JsonObject &obj)
   {
     const char *t = obj["type"];
     if (strcmp(t, "text") == 0)
+    {
+      keyboard = &text_keyset;
       setType(TEXT_TYPE);
+    }
     else if (strcmp(t, "num") == 0)
+    {
+      keyboard = &num_keyset;
       setType(NUM_TYPE);
+    }
     else if (strcmp(t, "check") == 0)
       setType(NUM_TYPE);
     // strncpy(type, (const char *)obj["type"], sizeof(type) - 1);
@@ -221,6 +251,10 @@ void MenuEntry::reset()
   selected = 0;
   content = conf[name];
   pos = 0;
+  if (content.length() > 0)
+  {
+    keyboard->findKey(content[0], keyset, keysetpos);
+  }
 }
 
 void Screen::dump()
@@ -374,44 +408,6 @@ void keydown(uint8_t k)
   Serial.printf("Key %d pressed\n", k);
 }
 
-bool keytick(uint8_t k, unsigned long durn)
-{
-  MenuEntry *current = NULL;
-  MenuEntryType typ = MISC_TYPE; // ie don't know what it is
-
-  bool result = false;
-
-  if (durn >= 750)
-  {
-
-    if (!navigation.empty())
-    {
-      current = navigation.top();
-      typ = current->getType();
-    }
-
-    switch (typ)
-    {
-    case NUM_TYPE:
-    case TEXT_TYPE:
-      switch (k)
-      {
-      case KEY_LEFT:
-        Serial.println("Switch Character sets left");
-        result = true;
-        break;
-      case KEY_RIGHT:
-        Serial.println("Switch Character sets right");
-        result = true;
-        break;
-      };
-    default:
-      break;
-    };
-  }
-  return result;
-}
-
 void keyup(uint8_t k, unsigned long durn)
 {
   unsigned long pressLength = millis() - keypressedAt;
@@ -484,6 +480,31 @@ void keyup(uint8_t k, unsigned long durn)
   }
 }
 
+bool keytick(uint8_t k, unsigned long durn)
+{
+  uint8_t transk = 0;
+  bool result = false;
+
+  if (durn >= 750)
+  {
+    switch (k)
+    {
+    case KEY_LEFT:
+      transk = ADD_KEY_LLEFT;
+      break;
+    case KEY_RIGHT:
+      transk = ADD_KEY_LRIGHT;
+      break;
+    }
+    if (transk != 0)
+    {
+      keyup(transk, durn);
+      result = true;
+    }
+  }
+  return result;
+}
+
 void MenuEntry::dealMenu(uint8_t k)
 {
   switch (k)
@@ -506,7 +527,9 @@ void MenuEntry::dealMenu(uint8_t k)
 
 void MenuEntry::dealLeaf(uint8_t k)
 {
-  unsigned char curchar = content[pos];
+  unsigned char curchar = keyboard->set[keyset][keysetpos];
+
+  Serial.printf("dealLeaf(%d)\n", k);
 
   switch (k)
   {
@@ -515,11 +538,26 @@ void MenuEntry::dealLeaf(uint8_t k)
       pos--;
     break;
   case KEY_UP:
-    curchar--;
+    keysetpos++;
+    if (keysetpos >= (int)strlen(keyboard->set[keyset]))
+    {
+      keysetpos = 0;
+    }
+    curchar = keyboard->set[keyset][keysetpos];
+    Serial.printf("curchar (at %d) is now %d(%c)\n", pos, curchar, isprint(curchar) ? curchar : ' ');
+    while (content.length() <= pos)
+      content += ' ';
     content[pos] = curchar;
     break;
   case KEY_DOWN:
-    curchar++;
+    keysetpos--;
+    if (keysetpos < 0)
+    {
+      keysetpos = strlen(keyboard->set[keyset]) - 1;
+    }
+    Serial.printf("curchar (at %d) is now %d(%c)\n", pos, curchar, isprint(curchar) ? curchar : ' ');
+    while (content.length() <= pos)
+      content += ' ';
     content[pos] = curchar;
     break;
   case KEY_RIGHT:
@@ -530,9 +568,29 @@ void MenuEntry::dealLeaf(uint8_t k)
     }
     break;
   case KEY_OK:
-    Serial.printf("Update config %s=%s\n", getName(), content.c_str());
+    Serial.printf("Update config %s=\"%s\"\n", getName(), content.c_str());
     conf[name] = content;
     conf.writeFile();
+    break;
+  case ADD_KEY_LLEFT:
+    if (keyset > 0)
+      keyset--;
+    else
+      keyset = keyboard->nsets - 1;
+      if (keysetpos >= strlen(keyboard->set[keyset])) keysetpos = 0;
+    curchar = keyboard->set[keyset][keysetpos];
+    content[pos] = curchar;
+    Serial.printf("Switch Character sets left to %d\n", keyset);
+    break;
+  case ADD_KEY_LRIGHT:
+    if ((keyset + 1) < keyboard->nsets)
+      keyset++;
+    else
+      keyset = 0;
+    if (keysetpos >= strlen(keyboard->set[keyset])) keysetpos = 0;
+    curchar = keyboard->set[keyset][keysetpos];
+    content[pos] = curchar;
+    Serial.printf("Switch Character sets right to %d\n", keyset);
     break;
   }
 }

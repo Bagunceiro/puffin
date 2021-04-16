@@ -20,6 +20,8 @@
 
 #define serr Serial
 
+bool testmode = false;;
+
 BreadCrumb navigation;
 
 PZEM004Tv30 pzem(14, 12);
@@ -168,19 +170,25 @@ void doMeasurements()
 {
     // pzem.updateValues();
 
-    float v = pzem.voltage();
-    float a = pzem.current();
-    float hz = pzem.frequency();
-    float pf = pzem.pf();
+    float v;
+    float a;
+    float hz;
+    float pf;
 
-    // *************
-    // Test Values
-    //v  = (1295 + random(10)) / 10.0;
-    a = (800.0 + random(300)) / 1000;
-    pf = (85 + random(10)) / 100.0;
-    //hz = (590 + random(10)) / 10.0;
-
-    // *************
+    if (!testmode)
+    {
+        v = pzem.voltage();
+        a = pzem.current();
+        hz = pzem.frequency();
+        pf = pzem.pf();
+    }
+    else
+    {
+        v  = (1295 + random(10)) / 10.0;
+        a = (800.0 + random(300)) / 1000;
+        pf = (85 + random(10)) / 100.0;
+        hz = (590 + random(10)) / 10.0;
+    }
 
     float w = v * a * pf;
     float va = v * a;
@@ -267,6 +275,7 @@ void doMeasurements()
     events.send(ds, "ap power", millis());
     if (onMainScreen)
     {
+        fb.setTitle("TEST MODE");
         fb.setCursor(18, 0);
         fb.write(mqttConnected ? 'M' : ' ');
         fb.write(wifiConnected ? byte(0) : ' ');
@@ -287,32 +296,35 @@ void kpadloop()
 
 void wifiloop()
 {
-    wifiConnected = false;
-    static bool wasWiFiConnected = false;
+    if (conf[ssid_n].length() > 0)
+    {
+        wifiConnected = false;
+        static bool wasWiFiConnected = false;
 
-    if (WiFi.status() == WL_CONNECTED)
-    {
-        wifiConnected = true;
-        if (!wasWiFiConnected)
+        if (WiFi.status() == WL_CONNECTED)
         {
-            wasWiFiConnected = true;
-            Serial.printf("WiFi Connected - IP %s\n", WiFi.localIP().toString().c_str());
+            wifiConnected = true;
+            if (!wasWiFiConnected)
+            {
+                wasWiFiConnected = true;
+                Serial.printf("WiFi Connected - IP %s\n", WiFi.localIP().toString().c_str());
+            }
+            // mqttpoll();
         }
-        // mqttpoll();
-    }
-    else
-    {
-        static unsigned long then = 0;
-        unsigned long sinceThen = millis() - then;
-        if ((sinceThen > 5000) || (then == 0))
+        else
         {
-            WiFi.begin(conf[ssid_n], conf[psk_n]);
-            then = millis();
-        }
-        if (wasWiFiConnected)
-        {
-            wasWiFiConnected = false;
-            Serial.printf("WiFi Connection lost\n");
+            static unsigned long then = 0;
+            unsigned long sinceThen = millis() - then;
+            if ((sinceThen > 5000) || (then == 0))
+            {
+                WiFi.begin(conf[ssid_n], conf[psk_n]);
+                then = millis();
+            }
+            if (wasWiFiConnected)
+            {
+                wasWiFiConnected = false;
+                Serial.printf("WiFi Connection lost\n");
+            }
         }
     }
 }
@@ -325,9 +337,6 @@ void setup()
     {
         conf.dump(Serial);
     }
-    conf[ssid_n] = "asgard_2g";
-    conf[psk_n]  = "enaLkraP";
-    conf.writeFile();
     Wire.begin(5, 4);
     lcd.init();
     lcd.backlight();
@@ -340,6 +349,12 @@ void setup()
     menuRoot.buildmenu();
     lcd.display();
     wssetup();
+
+    if (isnan(pzem.voltage()))
+    {
+        Serial.println("TEST MODE");
+        testmode = true;
+    }
 }
 
 void loop()
