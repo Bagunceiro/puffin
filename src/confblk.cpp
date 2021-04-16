@@ -31,11 +31,11 @@ bool ConfBlk::writeFile() const
 {
     bool result = false;
 
-    File configFile = LITTLEFS.open(_fileName, "w");
+    File configFile = LittleFS.open(_fileName, "w");
     if (!configFile)
     {
         perror("");
-        serr.println("Config file open for write failed");
+        Serial.println("Config file open for write failed");
         result = false;
     }
     else
@@ -56,7 +56,7 @@ bool ConfBlk::readStream(Stream &s)
     DeserializationError error = deserializeJson(doc, s);
     if (error)
     {
-        serr.printf("Config deserialization error (%d)\n", error.code());
+        Serial.printf("Config deserialization error (%d)\n", error.code());
         result = false;
     }
     else
@@ -75,10 +75,10 @@ bool ConfBlk::readFile()
 {
     bool result = false;
 
-    File configFile = LITTLEFS.open(_fileName, "r");
+    File configFile = LittleFS.open(_fileName, "r");
     if (!configFile)
     {
-        serr.println("Config file open for read failed");
+        Serial.println("Config file open for read failed");
     }
     else
     {

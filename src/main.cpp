@@ -11,10 +11,11 @@
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <TaskScheduler.h>
+#include <LittleFS.h>
 
+#include "config.h"
 #include "framebuff.h"
 #include "analogkeypad.h"
-
 #include "menu.h"
 
 #define serr Serial
@@ -26,6 +27,7 @@ extern LiquidCrystal_I2C lcd;
 extern void wssetup();
 extern AsyncEventSource events;
 bool wifiConnected = false;
+ConfBlk conf("puffin.json");
 
 WiFiClient mqttWifiClient;
 PubSubClient mqttClient(mqttWifiClient);
@@ -304,7 +306,7 @@ void wifiloop()
         unsigned long sinceThen = millis() - then;
         if ((sinceThen > 5000) || (then == 0))
         {
-            WiFi.begin("asgard_2g", "enaLkraP");
+            WiFi.begin(conf[ssid_n], conf[psk_n]);
             then = millis();
         }
         if (wasWiFiConnected)
@@ -318,6 +320,14 @@ void wifiloop()
 void setup()
 {
     Serial.begin(9600);
+    LittleFS.begin();
+    if (conf.readFile())
+    {
+        conf.dump(Serial);
+    }
+    conf[ssid_n] = "asgard_2g";
+    conf[psk_n]  = "enaLkraP";
+    conf.writeFile();
     Wire.begin(5, 4);
     lcd.init();
     lcd.backlight();

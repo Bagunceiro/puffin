@@ -99,7 +99,7 @@ public:
     // void key(uint8_t k);
     // void render();
     Menu entries;
-
+    void reset();
     String content;
     uint8_t pos;
 

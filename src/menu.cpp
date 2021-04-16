@@ -2,6 +2,7 @@
 #include "menu.h"
 #include "analogkeypad.h"
 #include "framebuff.h"
+#include "config.h"
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
@@ -20,6 +21,22 @@ struct keyboard
   charset sets[4];
   int nsets;
 };
+
+void menuAdd(MenuEntry *m)
+{
+  m->reset();
+  navigation.push(m);
+}
+
+void menuRemove()
+{
+  navigation.pop();
+  if (!navigation.empty())
+  {
+    MenuEntry *m = navigation.top();
+    m->reset();
+  }
+}
 
 charset ALPHA_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 charset alpha_chars = "abcdefghijklmnopqrstuvwxyz";
@@ -197,6 +214,13 @@ void MenuEntry::buildmenu()
   JsonObject root = doc.as<JsonObject>();
   menuRoot.build(root);
   menuRoot.dump();
+}
+
+void MenuEntry::reset()
+{
+  selected = 0;
+  content = conf[name];
+  pos = 0;
 }
 
 void Screen::dump()
@@ -402,7 +426,7 @@ void keyup(uint8_t k, unsigned long durn)
   {
     if (navigation.empty())
     {
-      navigation.push(&menuRoot);
+      menuAdd(&menuRoot);
     }
     else
       while (!navigation.empty())
@@ -430,30 +454,33 @@ void keyup(uint8_t k, unsigned long durn)
     }
   }
 
-  current = navigation.top(); // Refresh it. The above may have caused change of screen
-
-  MenuEntryType typ = current->getType();
-  Serial.println(current->getName());
-
-  current->output(fb);
-  switch (typ)
+  if (!navigation.empty())
   {
-  case MENU_TYPE:
-    Serial.println("Menu");
-    if (current->getSelected())
+    current = navigation.top(); // Refresh it. The above may have caused change of screen
+
+    MenuEntryType typ = current->getType();
+    Serial.println(current->getName());
+
+    current->output(fb);
+    switch (typ)
     {
-      Serial.printf("Selected = %s\n", current->getSelected()->getName());
+    case MENU_TYPE:
+      Serial.println("Menu");
+      if (current->getSelected())
+      {
+        Serial.printf("Selected = %s\n", current->getSelected()->getName());
+      }
+      break;
+    case TEXT_TYPE:
+    case NUM_TYPE:
+    case CHECK_TYPE:
+      lcd.setCursor(current->pos, 2);
+      lcd.blink_on();
+      break;
+    default:
+      Serial.println("Unknown");
+      break;
     }
-    break;
-  case TEXT_TYPE:
-  case NUM_TYPE:
-  case CHECK_TYPE:
-    lcd.setCursor(current->pos, 2);
-    lcd.blink_on();
-    break;
-  default:
-    Serial.println("Unknown");
-    break;
   }
 }
 
@@ -462,14 +489,14 @@ void MenuEntry::dealMenu(uint8_t k)
   switch (k)
   {
   case KEY_LEFT:
-    navigation.pop();
+    menuRemove();
     break;
   case KEY_UP:
     selectminus();
     break;
   case KEY_RIGHT:
   case KEY_OK:
-    navigation.push(getSelected());
+    menuAdd(getSelected());
     break;
   case KEY_DOWN:
     selectplus();
@@ -484,7 +511,7 @@ void MenuEntry::dealLeaf(uint8_t k)
   switch (k)
   {
   case KEY_LEFT:
-    if (pos >= 0)
+    if (pos > 0)
       pos--;
     break;
   case KEY_UP:
@@ -504,6 +531,8 @@ void MenuEntry::dealLeaf(uint8_t k)
     break;
   case KEY_OK:
     Serial.printf("Update config %s=%s\n", getName(), content.c_str());
+    conf[name] = content;
+    conf.writeFile();
     break;
   }
 }
