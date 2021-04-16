@@ -76,8 +76,8 @@ typedef const char *charset;
 struct keyset_t
 {
   charset set[4];
-  int nsets;
-  bool findKey(unsigned char k, int& set, int& pos);
+  unsigned int nsets;
+  bool findKey(unsigned char k, unsigned int& set, unsigned int& pos);
 };
 
 class MenuEntry
@@ -111,8 +111,8 @@ public:
     String content;
     uint8_t pos;
     keyset_t* keyboard;
-    int keyset;
-    int keysetpos;
+    unsigned int keyset;
+    unsigned int keysetpos;
 
 private:
     MenuEntryType type;

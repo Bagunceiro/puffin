@@ -17,38 +17,66 @@ extern FrameBuffer fb;
 
 #define ADD_KEY_LLEFT 11
 #define ADD_KEY_LRIGHT 12
+#define ADD_KEY_LDOWN 13
+#define ADD_KEY_LUP 13
 
-charset ALPHA_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-charset alpha_chars = "abcdefghijklmnopqrstuvwxyz";
+charset ALPHA_chars = " ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+charset alpha_chars = " abcdefghijklmnopqrstuvwxyz";
 charset num_chars = "0123456789";
 charset punc_chars = " !\"#$%&'()*+,-./:;<=>?[\\]^_{|}~";
 
 keyset_t num_keyset = {{num_chars}, 1};
 keyset_t text_keyset = {{alpha_chars, ALPHA_chars, num_chars, punc_chars}, 4};
 
-bool keyset_t::findKey(unsigned char k, int &s, int &p)
+void addCharAt(String &s, unsigned int pos, unsigned char c)
 {
-  bool found = false;
-  for (s = 0; s < nsets; s++)
+  while (s.length() <= pos)
   {
-    unsigned char c;
-    for (p = 0; (c = set[s][p]) != '\00'; p++)
+    s += ' ';
+  }
+  s[pos] = c;
+}
+
+bool keyset_t::findKey(unsigned char k, unsigned int &s, unsigned int &p)
+{
+  Serial.printf("findKey(%c, %d, %d)\n", k, s, p);
+  if (k != '\00')
+  {
+    bool found = false;
+    unsigned int s1 = s;
+    bool sloop = false;
+    for (; sloop ? (s < s1) : (s <= nsets); s++)
     {
-      if (c == k)
+      Serial.printf("test set %d\n", s);
+      if (s == nsets)
       {
-        found = true;
-        break;
+        s = -1;
+        sloop = true;
+        Serial.println("loop back");
+        continue;
       }
+      unsigned char c;
+      for (p = 0; (c = set[s][p]) != '\00'; p++)
+      {
+        if (c == k)
+        {
+          Serial.printf("Found %c at %d %d\n", k, s, p);
+          found = true;
+          break;
+        }
+      }
+      if (found)
+        break;
     }
-    if (found)
-      break;
+    if (!found)
+    {
+      s = 0;
+      p = 0;
+    }
+    return found;
   }
-  if (!found)
-  {
-    s = 0;
+  else
     p = 0;
-  }
-  return found;
 }
 
 void menuAdd(MenuEntry *m)
@@ -495,6 +523,9 @@ bool keytick(uint8_t k, unsigned long durn)
     case KEY_RIGHT:
       transk = ADD_KEY_LRIGHT;
       break;
+    case KEY_DOWN:
+      transk = ADD_KEY_LDOWN;
+      break;
     }
     if (transk != 0)
     {
@@ -529,8 +560,6 @@ void MenuEntry::dealLeaf(uint8_t k)
 {
   unsigned char curchar = keyboard->set[keyset][keysetpos];
 
-  Serial.printf("dealLeaf(%d)\n", k);
-
   switch (k)
   {
   case KEY_LEFT:
@@ -539,15 +568,13 @@ void MenuEntry::dealLeaf(uint8_t k)
     break;
   case KEY_UP:
     keysetpos++;
-    if (keysetpos >= (int)strlen(keyboard->set[keyset]))
+    if (keysetpos >= strlen(keyboard->set[keyset]))
     {
       keysetpos = 0;
     }
     curchar = keyboard->set[keyset][keysetpos];
     Serial.printf("curchar (at %d) is now %d(%c)\n", pos, curchar, isprint(curchar) ? curchar : ' ');
-    while (content.length() <= pos)
-      content += ' ';
-    content[pos] = curchar;
+    addCharAt(content, pos, curchar);
     break;
   case KEY_DOWN:
     keysetpos--;
@@ -555,31 +582,37 @@ void MenuEntry::dealLeaf(uint8_t k)
     {
       keysetpos = strlen(keyboard->set[keyset]) - 1;
     }
+    curchar = keyboard->set[keyset][keysetpos];
     Serial.printf("curchar (at %d) is now %d(%c)\n", pos, curchar, isprint(curchar) ? curchar : ' ');
-    while (content.length() <= pos)
-      content += ' ';
-    content[pos] = curchar;
+    addCharAt(content, pos, curchar);
     break;
   case KEY_RIGHT:
     pos++;
     if (content.length() < pos)
     {
-      content += ' ';
+      keysetpos = 0;
     }
     break;
   case KEY_OK:
+
+    while (content.endsWith(" "))
+    {
+      content.remove(content.length() - 1);
+    }
     Serial.printf("Update config %s=\"%s\"\n", getName(), content.c_str());
     conf[name] = content;
     conf.writeFile();
+    navigation.pop();
     break;
   case ADD_KEY_LLEFT:
     if (keyset > 0)
       keyset--;
     else
       keyset = keyboard->nsets - 1;
-      if (keysetpos >= strlen(keyboard->set[keyset])) keysetpos = 0;
+    if (keysetpos >= strlen(keyboard->set[keyset]))
+      keysetpos = 0;
     curchar = keyboard->set[keyset][keysetpos];
-    content[pos] = curchar;
+    addCharAt(content, pos, curchar);
     Serial.printf("Switch Character sets left to %d\n", keyset);
     break;
   case ADD_KEY_LRIGHT:
@@ -587,10 +620,23 @@ void MenuEntry::dealLeaf(uint8_t k)
       keyset++;
     else
       keyset = 0;
-    if (keysetpos >= strlen(keyboard->set[keyset])) keysetpos = 0;
+    if (keysetpos >= strlen(keyboard->set[keyset]))
+      keysetpos = 0;
     curchar = keyboard->set[keyset][keysetpos];
-    content[pos] = curchar;
+    addCharAt(content, pos, curchar);
     Serial.printf("Switch Character sets right to %d\n", keyset);
     break;
+  case ADD_KEY_LDOWN:
+    keyset = 0;
+    keysetpos = 0;
+    if (pos < content.length())
+      content[pos] = ' ';
+    break;
+  }
+  Serial.printf("dealLeaf(%d) pos = %d\n", k, pos);
+
+  if (content.length() >= pos)
+  {
+    keyboard->findKey(content[pos], keyset, keysetpos);
   }
 }
