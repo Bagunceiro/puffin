@@ -329,6 +329,18 @@ void wifiloop()
     }
 }
 
+void buttonPress(const char* name)
+{
+    if (strcmp(name,"WPS") == 0)
+    {
+        Serial.println("Trigger WPS");
+    }
+    else
+    {
+        Serial.printf("Unknown button %s\n", name);
+    }
+}
+
 void setup()
 {
     Serial.begin(9600);
@@ -346,6 +358,7 @@ void setup()
     lcd.createChar(0, antenna);
 
     Screen::build();
+    menuRoot.setButtonCallback(buttonPress);
     menuRoot.buildmenu();
     lcd.display();
     wssetup();

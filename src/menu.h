@@ -115,6 +115,7 @@ public:
     keyset_t* keyboard;
     unsigned int keyset;
     unsigned int keysetpos;
+    void setButtonCallback(void(*cb)(const char*)) { buttonCallback = cb; }
 
 private:
     MenuEntryType type;
@@ -122,6 +123,7 @@ private:
     char name[20];
     int selected;
     int startDisplayAt;
+    static void(*buttonCallback)(const char*);
 };
 
 typedef std::stack<MenuEntry *> BreadCrumb;

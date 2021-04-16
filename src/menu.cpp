@@ -29,6 +29,8 @@ charset punc_chars = "!\"#$%&'()*+,-./:;<=>?[\\]^_{|}~";
 keyset_t num_keyset = {{num_chars}, 1};
 keyset_t text_keyset = {{alpha_chars, ALPHA_chars, num_chars, punc_chars}, 4};
 
+void(*MenuEntry::buttonCallback)(const char*) = NULL;
+
 void MenuEntry::addChar()
 {
   while (content.length() <= pos)
@@ -197,52 +199,9 @@ void MenuEntry::build(JsonObject &obj)
       setType(NUM_TYPE);
     }
     else if (strcmp(t, "button") == 0)
-      setType(BUTTON_TYPE);
-    // strncpy(type, (const char *)obj["type"], sizeof(type) - 1);
-    for (int i = 0; i < level; i++)
-      Serial.print("  ");
-    Serial.printf("Leaf: type is %s\n", (const char *)obj["type"]);
-  }
-  else
-  {
-    for (int i = 0; i < level; i++)
-      Serial.print("  ");
-    Serial.println("Don't know what to do with it");
-  }
-  level--;
-}
-/*
-{
-  static int level = 0;
-  level++;
-  
-  if (obj["menu"])
-  {
-    // Serial.println("It's a menu");
-    JsonArray menuArray = obj["menu"].as<JsonArray>();
-    for (JsonObject item : menuArray)
     {
-      if (item["n"])
-      {
-        for (int i = 0; i < level; i++)
-          Serial.print("  ");
-        Serial.printf("%s\n", (const char *)item["n"]);
-      }
-      else
-      {
-        Serial.println("No name");
-      }
-      MenuEntry m;
-      m.setType(MENU_TYPE);
-      strncpy(m.name, (const char *)item["n"], sizeof(m.name) - 1);
-      m.build(item);
-      entries.push_back(m);
+      setType(BUTTON_TYPE);
     }
-  }
-  else if (obj["type"])
-  {
-    setType(LEAF_TYPE);
-    // strncpy(type, (const char *)obj["type"], sizeof(type) - 1);
     for (int i = 0; i < level; i++)
       Serial.print("  ");
     Serial.printf("Leaf: type is %s\n", (const char *)obj["type"]);
@@ -255,7 +214,6 @@ void MenuEntry::build(JsonObject &obj)
   }
   level--;
 }
-*/
 
 void MenuEntry::buildmenu()
 {
@@ -642,6 +600,7 @@ void MenuEntry::dealButton(uint8_t k)
   {
   case KEY_OK:
     Serial.printf("Button %s pressed\n", name);
+    if (buttonCallback) buttonCallback(name);
     break;
   default:
     break;
