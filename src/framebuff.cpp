@@ -108,9 +108,8 @@ size_t FrameBuffer::write(uint8_t c)
 
 void FrameBuffer::setTitle(const char *t)
 {
-    fixedTitle = true;
-    setCursor(0, 0);
-    print(t);
+    // fixedTitle = true;
+    writeField(0,0,20,t);
     setCursor(0, 1);
 }
 

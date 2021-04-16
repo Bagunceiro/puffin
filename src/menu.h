@@ -69,7 +69,7 @@ enum MenuEntryType {
     MENU_TYPE,
     TEXT_TYPE,
     NUM_TYPE,
-    CHECK_TYPE
+    BUTTON_TYPE
 };
 
 typedef const char *charset;
@@ -104,6 +104,8 @@ public:
     void selectminus() { if (selected > 0 ) selected--; }
     void dealLeaf(uint8_t key);
     void dealMenu(uint8_t key);
+    void dealButton(uint8_t key);
+    void deal(uint8_t key);
     // void key(uint8_t k);
     // void render();
     Menu entries;
@@ -116,6 +118,7 @@ public:
 
 private:
     MenuEntryType type;
+    void addChar();
     char name[20];
     int selected;
     int startDisplayAt;

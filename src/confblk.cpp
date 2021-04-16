@@ -2,12 +2,12 @@
 #include <ArduinoJson.h>
 #include "LittleFS.h"
 
-ConfBlk::ConfBlk(const String& fileName)
+ConfBlk::ConfBlk(const String &fileName)
 {
     _fileName = fileName;
 }
 
-void ConfBlk::dump(Stream& s) const
+void ConfBlk::dump(Stream &s) const
 {
     for (auto iterator : *this)
     {
@@ -64,7 +64,7 @@ bool ConfBlk::readStream(Stream &s)
         JsonObject root = doc.as<JsonObject>();
         for (JsonPair kv : root)
         {
-            (*this)[kv.key().c_str()] = (const char*)kv.value();
+            (*this)[kv.key().c_str()] = (const char *)kv.value();
         }
         result = true;
     }

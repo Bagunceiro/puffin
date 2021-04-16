@@ -15,8 +15,8 @@ const char *menujson =
           "type": "text"
         },
         {
-          "n": "WSP",
-          "type": "check"
+          "n": "WPS",
+          "type": "button"
         }
       ]
     },

@@ -33,5 +33,5 @@ class FrameBuffer : public Stream
     uint8_t cury;   
     char **charArray[2];
 
-    bool fixedTitle;
+    // bool fixedTitle;
 };

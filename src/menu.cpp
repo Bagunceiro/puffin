@@ -18,41 +18,39 @@ extern FrameBuffer fb;
 #define ADD_KEY_LLEFT 11
 #define ADD_KEY_LRIGHT 12
 #define ADD_KEY_LDOWN 13
-#define ADD_KEY_LUP 13
+#define ADD_KEY_LUP 14
+#define ADD_KEY_LMENU 15
 
 charset ALPHA_chars = " ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 charset alpha_chars = " abcdefghijklmnopqrstuvwxyz";
-charset num_chars = "0123456789";
-charset punc_chars = " !\"#$%&'()*+,-./:;<=>?[\\]^_{|}~";
+charset num_chars = "0123456789.";
+charset punc_chars = "!\"#$%&'()*+,-./:;<=>?[\\]^_{|}~";
 
 keyset_t num_keyset = {{num_chars}, 1};
 keyset_t text_keyset = {{alpha_chars, ALPHA_chars, num_chars, punc_chars}, 4};
 
-void addCharAt(String &s, unsigned int pos, unsigned char c)
+void MenuEntry::addChar()
 {
-  while (s.length() <= pos)
+  while (content.length() <= pos)
   {
-    s += ' ';
+    content += ' ';
   }
-  s[pos] = c;
+  content[pos] = keyboard->set[keyset][keysetpos];
 }
 
 bool keyset_t::findKey(unsigned char k, unsigned int &s, unsigned int &p)
 {
-  Serial.printf("findKey(%c, %d, %d)\n", k, s, p);
+  bool found = false;
   if (k != '\00')
   {
-    bool found = false;
     unsigned int s1 = s;
     bool sloop = false;
     for (; sloop ? (s < s1) : (s <= nsets); s++)
     {
-      Serial.printf("test set %d\n", s);
       if (s == nsets)
       {
         s = -1;
         sloop = true;
-        Serial.println("loop back");
         continue;
       }
       unsigned char c;
@@ -60,7 +58,6 @@ bool keyset_t::findKey(unsigned char k, unsigned int &s, unsigned int &p)
       {
         if (c == k)
         {
-          Serial.printf("Found %c at %d %d\n", k, s, p);
           found = true;
           break;
         }
@@ -73,10 +70,10 @@ bool keyset_t::findKey(unsigned char k, unsigned int &s, unsigned int &p)
       s = 0;
       p = 0;
     }
-    return found;
   }
   else
     p = 0;
+  return found;
 }
 
 void menuAdd(MenuEntry *m)
@@ -199,8 +196,8 @@ void MenuEntry::build(JsonObject &obj)
       keyboard = &num_keyset;
       setType(NUM_TYPE);
     }
-    else if (strcmp(t, "check") == 0)
-      setType(NUM_TYPE);
+    else if (strcmp(t, "button") == 0)
+      setType(BUTTON_TYPE);
     // strncpy(type, (const char *)obj["type"], sizeof(type) - 1);
     for (int i = 0; i < level; i++)
       Serial.print("  ");
@@ -404,7 +401,9 @@ void MenuEntry::output(FrameBuffer &fb)
 {
   fb.clear();
   fb.setTitle(name);
-  if (getType() == MENU_TYPE)
+  switch (getType())
+  {
+  case MENU_TYPE:
   {
     if (selected < startDisplayAt)
       startDisplayAt = selected;
@@ -418,10 +417,31 @@ void MenuEntry::output(FrameBuffer &fb)
       fb.print('\n');
     }
   }
-  else
+  break;
+  case BUTTON_TYPE:
   {
+    fb.setCursor(9, 2);
+    fb.print('O');
+  }
+  break;
+  default:
+  {
+    fb.writeField(0, 1, 20, "");
+    fb.writeField(0, 3, 20, "");
+    int kp1 = keysetpos + 1;
+    int kp2 = keysetpos - 1;
+    if (kp1 >= (int)strlen(keyboard->set[keyset]))
+      kp1 = 0;
+    if (kp2 < 0)
+      kp2 = strlen(keyboard->set[keyset]) - 1;
+    fb.setCursor(pos, 1);
+    fb.print(keyboard->set[keyset][kp1]);
+    fb.setCursor(pos, 3);
+    fb.print(keyboard->set[keyset][kp2]);
     fb.setCursor(0, 2);
     fb.print(content);
+  }
+  break;
   }
   fb.display(lcd);
 }
@@ -449,32 +469,22 @@ void keyup(uint8_t k, unsigned long durn)
   if (k == KEY_MENU)
   {
     if (navigation.empty())
-    {
       menuAdd(&menuRoot);
-    }
     else
-      while (!navigation.empty())
-      {
-        navigation.pop();
-      }
+      navigation.pop();
   }
-  else // Key is not key_menu so is context specific
+  else if (k == ADD_KEY_LMENU)
+  {
+    while (!navigation.empty())
+      navigation.pop();
+  }
+  else // Key is context specific
   {
     // Retrieve the current menu entry (if not on the main screen)
     if (!navigation.empty())
     {
       current = navigation.top();
-
-      // If on a menu screen
-      if (current->getType() == MENU_TYPE)
-      {
-        current->dealMenu(k);
-      }
-      // On a leaf screen
-      else
-      {
-        current->dealLeaf(k);
-      }
+      current->deal(k);
     }
   }
 
@@ -483,26 +493,23 @@ void keyup(uint8_t k, unsigned long durn)
     current = navigation.top(); // Refresh it. The above may have caused change of screen
 
     MenuEntryType typ = current->getType();
-    Serial.println(current->getName());
 
-    current->output(fb);
     switch (typ)
     {
-    case MENU_TYPE:
-      Serial.println("Menu");
-      if (current->getSelected())
-      {
-        Serial.printf("Selected = %s\n", current->getSelected()->getName());
-      }
-      break;
     case TEXT_TYPE:
     case NUM_TYPE:
-    case CHECK_TYPE:
+      current->output(fb);
       lcd.setCursor(current->pos, 2);
       lcd.blink_on();
       break;
+    case BUTTON_TYPE:
+      current->output(fb);
+      lcd.setCursor(9, 2);
+      lcd.blink_on();
+      break;
+    case MENU_TYPE:
     default:
-      Serial.println("Unknown");
+      current->output(fb);
       break;
     }
   }
@@ -526,6 +533,9 @@ bool keytick(uint8_t k, unsigned long durn)
     case KEY_DOWN:
       transk = ADD_KEY_LDOWN;
       break;
+    case KEY_MENU:
+      transk = ADD_KEY_LMENU;
+      break;
     }
     if (transk != 0)
     {
@@ -534,6 +544,21 @@ bool keytick(uint8_t k, unsigned long durn)
     }
   }
   return result;
+}
+
+void MenuEntry::deal(uint8_t k)
+{
+  switch (type)
+  {
+  case MENU_TYPE:
+    dealMenu(k);
+    break;
+  case BUTTON_TYPE:
+    dealButton(k);
+    break;
+  default:
+    dealLeaf(k);
+  }
 }
 
 void MenuEntry::dealMenu(uint8_t k)
@@ -558,8 +583,6 @@ void MenuEntry::dealMenu(uint8_t k)
 
 void MenuEntry::dealLeaf(uint8_t k)
 {
-  unsigned char curchar = keyboard->set[keyset][keysetpos];
-
   switch (k)
   {
   case KEY_LEFT:
@@ -572,19 +595,16 @@ void MenuEntry::dealLeaf(uint8_t k)
     {
       keysetpos = 0;
     }
-    curchar = keyboard->set[keyset][keysetpos];
-    Serial.printf("curchar (at %d) is now %d(%c)\n", pos, curchar, isprint(curchar) ? curchar : ' ');
-    addCharAt(content, pos, curchar);
+    addChar();
     break;
   case KEY_DOWN:
-    keysetpos--;
-    if (keysetpos < 0)
+    if (keysetpos > 0)
+      keysetpos--;
+    else
     {
       keysetpos = strlen(keyboard->set[keyset]) - 1;
     }
-    curchar = keyboard->set[keyset][keysetpos];
-    Serial.printf("curchar (at %d) is now %d(%c)\n", pos, curchar, isprint(curchar) ? curchar : ' ');
-    addCharAt(content, pos, curchar);
+    addChar();
     break;
   case KEY_RIGHT:
     pos++;
@@ -594,7 +614,6 @@ void MenuEntry::dealLeaf(uint8_t k)
     }
     break;
   case KEY_OK:
-
     while (content.endsWith(" "))
     {
       content.remove(content.length() - 1);
@@ -611,9 +630,9 @@ void MenuEntry::dealLeaf(uint8_t k)
       keyset = keyboard->nsets - 1;
     if (keysetpos >= strlen(keyboard->set[keyset]))
       keysetpos = 0;
-    curchar = keyboard->set[keyset][keysetpos];
-    addCharAt(content, pos, curchar);
-    Serial.printf("Switch Character sets left to %d\n", keyset);
+    // curchar = keyboard->set[keyset][keysetpos];
+    addChar(); //At(content, pos, curchar);
+    // Serial.printf("Switch Character sets left to %d\n", keyset);
     break;
   case ADD_KEY_LRIGHT:
     if ((keyset + 1) < keyboard->nsets)
@@ -622,9 +641,9 @@ void MenuEntry::dealLeaf(uint8_t k)
       keyset = 0;
     if (keysetpos >= strlen(keyboard->set[keyset]))
       keysetpos = 0;
-    curchar = keyboard->set[keyset][keysetpos];
-    addCharAt(content, pos, curchar);
-    Serial.printf("Switch Character sets right to %d\n", keyset);
+    // curchar = keyboard->set[keyset][keysetpos];
+    addChar(); //At(content, pos, curchar);
+    // Serial.printf("Switch Character sets right to %d\n", keyset);
     break;
   case ADD_KEY_LDOWN:
     keyset = 0;
@@ -633,10 +652,21 @@ void MenuEntry::dealLeaf(uint8_t k)
       content[pos] = ' ';
     break;
   }
-  Serial.printf("dealLeaf(%d) pos = %d\n", k, pos);
 
   if (content.length() >= pos)
   {
     keyboard->findKey(content[pos], keyset, keysetpos);
+  }
+}
+
+void MenuEntry::dealButton(uint8_t k)
+{
+  switch (k)
+  {
+  case KEY_OK:
+  Serial.printf("Button %s pressed\n", name);
+  break;
+  default:
+  break;
   }
 }
