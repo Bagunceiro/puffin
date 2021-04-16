@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <map>
 #include <vector>
+#include <stack>
 #include <LiquidCrystal_I2C.h>
 
 #include "framebuff.h"
@@ -63,21 +64,51 @@ class MenuEntry;
 
 typedef std::vector<MenuEntry> Menu;
 
-class MenuEntry
-{
-    public:
-    MenuEntry();
-    virtual ~MenuEntry() {}
-    void build(JsonObject& obj);
-    static void buildmenu();
-    const char* setName(const char* n);
-    const char* setType(const char* n);
-    void dump(int level = 0);
-    void output(FrameBuffer& s);
-    Menu entries;
-    private:
-    char type[10];
-    char name[20];
+enum MenuEntryType {
+    MISC_TYPE,
+    MENU_TYPE,
+    TEXT_TYPE,
+    NUM_TYPE,
+    CHECK_TYPE
 };
 
+class MenuEntry
+{
+public:
+    MenuEntry();
+    virtual ~MenuEntry() {}
+    void build(JsonObject &obj);
+    static void buildmenu();
+    void setType(MenuEntryType t) { type = t; }
+    void dump(int level = 0);
+    void output(FrameBuffer &s);
+    const char *getName() const { return name; }
+    const MenuEntryType getType() const { return type; }
+    MenuEntry *getSelected()
+    {
+        if (selected < (int)entries.size())
+        {
+            return &entries[selected];
+        }
+        else return NULL;
+    }
+    void selectplus() { if (++selected >= (int)entries.size()) selected--; }
+    void selectminus() { if (selected > 0 ) selected--; }
+    void dealLeaf(uint8_t key);
+    void dealMenu(uint8_t key);
+    // void key(uint8_t k);
+    // void render();
+    Menu entries;
+
+    String content;
+    uint8_t pos;
+
+private:
+    MenuEntryType type;
+    char name[20];
+    int selected;
+    int startDisplayAt;
+};
+
+typedef std::stack<MenuEntry *> BreadCrumb;
 typedef std::map<const char *, Screen> ScreenList;

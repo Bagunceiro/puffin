@@ -8,6 +8,7 @@ class FrameBuffer : public Stream
     FrameBuffer(uint8_t c, uint8_t r);
     virtual ~FrameBuffer();
     void clear(uint8_t buff = 0);
+    void writeField(const int col, const int row, const int length, const char *value);
     bool display(LiquidCrystal_I2C& lcd);
 
     void setCursor(uint8_t col, uint8_t row) { curx = col, cury = row; }

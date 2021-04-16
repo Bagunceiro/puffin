@@ -10,14 +10,16 @@
 #include <ArduinoJson.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <TaskScheduler.h>
 
 #include "framebuff.h"
 #include "analogkeypad.h"
-#include "timedevent.h"
 
 #include "menu.h"
 
 #define serr Serial
+
+BreadCrumb navigation;
 
 PZEM004Tv30 pzem(14, 12);
 extern LiquidCrystal_I2C lcd;
@@ -30,6 +32,17 @@ PubSubClient mqttClient(mqttWifiClient);
 
 int wifiattemptcount = 0;
 const int WIFI_CONNECT_ATTEMPT_PAUSE = 15000;
+
+Scheduler ts;
+void doMeasurements();
+void kpadloop();
+void wifiloop();
+void mqttloop();
+void menuloop();
+Task measurement_task(1000, TASK_FOREVER, &doMeasurements, &ts, true);
+Task kpad_task(20, TASK_FOREVER, &kpadloop, &ts, true);
+Task wifi_task(5000, TASK_FOREVER, &wifiloop, &ts, true);
+Task mqtt_task(500, TASK_FOREVER, &mqttloop, &ts, true);
 
 FrameBuffer fb(20, 10);
 
@@ -57,10 +70,10 @@ bool mqttinit()
 
     if ((lastAttempt == 0) || ((now - lastAttempt) > 10000))
     {
-        serr.print("Connecting to MQTT ");
+        serr.println("Connecting to MQTT");
         lastAttempt = now;
 
-        String clientID = String("PowerMeter_") + String(millis() % 1000);
+        String clientID = String("Puffin_") + String(millis() % 1000);
 
         mqttClient.setServer("192.168.0.101", 1883);
 
@@ -68,7 +81,6 @@ bool mqttinit()
                                "ctlr",
                                "fatty"))
         {
-            serr.println("MQTT connected");
             result = true;
         }
         else
@@ -82,24 +94,24 @@ bool mqttinit()
 
 static bool mqttConnected = false;
 
-bool mqttpoll()
+void mqttloop()
 {
-    bool result = true;
-
-    if (!mqttClient.loop())
+    if (wifiConnected)
     {
-        if (mqttConnected)
+        if (!mqttClient.loop())
         {
-            serr.println("Lost MQTT Connection");
-            result = false;
-        }
-        if (mqttinit())
-        {
-            serr.println("MQTT Connected");
+            if (mqttConnected)
+            {
+                serr.println("Lost MQTT Connection");
+                mqttConnected = false;
+            }
+            if (mqttinit())
+            {
+                serr.println("MQTT Connected");
+                mqttConnected = true;
+            }
         }
     }
-    mqttConnected = result;
-    return result;
 }
 
 const char antenna[8] =
@@ -150,7 +162,7 @@ char *sigfigs(const float val, const int figs, char *buffer)
     return buffer;
 }
 
-void doMeasurements(void *)
+void doMeasurements()
 {
     // pzem.updateValues();
 
@@ -162,7 +174,7 @@ void doMeasurements(void *)
     // *************
     // Test Values
     //v  = (1295 + random(10)) / 10.0;
-    a  = (800.0 + random(300)) / 1000;
+    a = (800.0 + random(300)) / 1000;
     pf = (85 + random(10)) / 100.0;
     //hz = (590 + random(10)) / 10.0;
 
@@ -198,7 +210,6 @@ void doMeasurements(void *)
     sigfigs(hz, 3, hz_s);
     sigfigs(va, 3, va_s);
 
-
     StaticJsonDocument<512> doc;
     doc["V"] = v_s;
     doc["A"] = a_s;
@@ -224,81 +235,55 @@ void doMeasurements(void *)
         wsuf = "mW";
     }
 
+    bool onMainScreen = navigation.empty();
+
     char ds[12];
     const char *fmt = "%6s %s";
     snprintf(ds, 10, fmt, v_s, "V");
-    displayField(0, 1, 10, ds);
+    if (onMainScreen)
+        fb.writeField(0, 1, 10, ds);
     events.send(ds, "voltage", millis());
     snprintf(ds, 10, fmt, a_s, asuf);
-    displayField(0, 2, 10, ds);
+    if (onMainScreen)
+        fb.writeField(0, 2, 10, ds);
     events.send(ds, "current", millis());
     snprintf(ds, 10, fmt, w_s, wsuf);
-    displayField(0, 3, 10, ds);
+    if (onMainScreen)
+        fb.writeField(0, 3, 10, ds);
     events.send(ds, "power", millis());
     snprintf(ds, 10, fmt, hz_s, "Hz");
-    displayField(10, 1, 10, ds);
+    if (onMainScreen)
+        fb.writeField(10, 1, 10, ds);
     events.send(ds, "frequency", millis());
     snprintf(ds, 10, fmt, pf_s, "PF");
-    displayField(10, 2, 10, ds);
+    if (onMainScreen)
+        fb.writeField(10, 2, 10, ds);
     events.send(ds, "power factor", millis());
     snprintf(ds, 10, fmt, va_s, "VA");
-    displayField(10, 3, 10, ds);
+    if (onMainScreen)
+        fb.writeField(10, 3, 10, ds);
     events.send(ds, "ap power", millis());
-
-    fb.setCursor(18, 0);
-    fb.write(mqttConnected ? 'M' : ' ');
-    fb.write(wifiConnected ? byte(0) : ' ');
-    fb.display(lcd);
+    if (onMainScreen)
+    {
+        fb.setCursor(18, 0);
+        fb.write(mqttConnected ? 'M' : ' ');
+        fb.write(wifiConnected ? byte(0) : ' ');
+        fb.display(lcd);
+    }
 }
 
-void keyup(uint8_t k)
-{
-    Serial.printf("Key %d released\n", k);
-}
+void keyup(uint8_t k, unsigned long);
+void keydown(uint8_t k);
+bool keytick(uint8_t k, unsigned long);
 
-void keydown(uint8_t k)
-{
-    Serial.printf("Key %d pressed\n", k);
-}
+AnalogKeyPad kpad(keydown, keyup, keytick);
 
-AnalogKeyPad kpad(keydown, keyup);
-
-void kpadloop(void *)
+void kpadloop()
 {
     kpad.poll();
 }
 
-void setup()
-{
-    Serial.begin(9600);
-    Wire.begin(4, 5);
-    lcd.init();
-    lcd.backlight();
-
-    WiFi.mode(WIFI_STA);
-
-    lcd.createChar(0, antenna);
-
-    Screen::build();
-    menuRoot.buildmenu();
-    menuRoot.dump();
-    lcd.display();
-    wssetup();
-    TimedEvent t("measurements", doMeasurements, 1000);
-    t.start();
-    TimedEvent t2("kpad", kpadloop, 20);
-    t2.start();
-}
-
-/*
-void blankField(const int col, const int row, const int length)
-{
-    for (int i = 0; i < length; i++)
-        lcd.print(' ');
-}
-*/
-
-void loop()
+void wifiloop()
 {
     wifiConnected = false;
     static bool wasWiFiConnected = false;
@@ -311,7 +296,7 @@ void loop()
             wasWiFiConnected = true;
             Serial.printf("WiFi Connected - IP %s\n", WiFi.localIP().toString().c_str());
         }
-        mqttpoll();
+        // mqttpoll();
     }
     else
     {
@@ -328,5 +313,26 @@ void loop()
             Serial.printf("WiFi Connection lost\n");
         }
     }
-    TimedEvent::poll();
+}
+
+void setup()
+{
+    Serial.begin(9600);
+    Wire.begin(5, 4);
+    lcd.init();
+    lcd.backlight();
+
+    WiFi.mode(WIFI_STA);
+
+    lcd.createChar(0, antenna);
+
+    Screen::build();
+    menuRoot.buildmenu();
+    lcd.display();
+    wssetup();
+}
+
+void loop()
+{
+    ts.execute();
 }

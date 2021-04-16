@@ -1,6 +1,7 @@
 const char *menujson =
     R"--(
 {
+  "n": "Main",
   "menu": [
     {
       "n": "WiFi",
@@ -15,7 +16,7 @@ const char *menujson =
         },
         {
           "n": "WSP",
-          "type": "checkbox"
+          "type": "check"
         }
       ]
     },

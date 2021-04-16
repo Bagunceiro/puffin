@@ -114,11 +114,18 @@ void FrameBuffer::setTitle(const char *t)
     setCursor(0, 1);
 }
 
-/*
-void FrameBuffer::displayMenu(MenuEntry& m, LiquidCrystal_I2C &lcd)
+void FrameBuffer::writeField(const int col, const int row, const int length, const char *value)
 {
-    clear();
-    m.output(*this);
-    display(lcd);
+    setCursor(col, row);
+
+    int l = strlen(value);
+    for (int i = 0; i < length; i++)
+    {
+        if (i < l)
+        {
+            print(value[i]);
+        }
+        else
+            print(' ');
+    }
 }
-*/
