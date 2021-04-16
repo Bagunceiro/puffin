@@ -446,23 +446,12 @@ void MenuEntry::output(FrameBuffer &fb)
   fb.display(lcd);
 }
 
-unsigned long keypressedAt = 0;
-uint8_t keypress = 0;
-
 void keydown(uint8_t k)
 {
-  keypressedAt = millis();
-  keypress = k;
-  Serial.printf("Key %d pressed\n", k);
 }
 
 void keyup(uint8_t k, unsigned long durn)
 {
-  unsigned long pressLength = millis() - keypressedAt;
-  keypressedAt = 0;
-  keypress = 0;
-  Serial.printf("Key %d released (%lu)\n", k, pressLength);
-
   MenuEntry *current = NULL;
   lcd.blink_off();
 
@@ -589,63 +578,51 @@ void MenuEntry::dealLeaf(uint8_t k)
     if (pos > 0)
       pos--;
     break;
+  case KEY_RIGHT:
+    pos++;
+    if (content.length() < pos)
+      keysetpos = 0;
+    break;
   case KEY_UP:
     keysetpos++;
     if (keysetpos >= strlen(keyboard->set[keyset]))
-    {
       keysetpos = 0;
-    }
     addChar();
     break;
   case KEY_DOWN:
     if (keysetpos > 0)
       keysetpos--;
     else
-    {
       keysetpos = strlen(keyboard->set[keyset]) - 1;
-    }
     addChar();
-    break;
-  case KEY_RIGHT:
-    pos++;
-    if (content.length() < pos)
-    {
-      keysetpos = 0;
-    }
     break;
   case KEY_OK:
     while (content.endsWith(" "))
-    {
       content.remove(content.length() - 1);
-    }
     Serial.printf("Update config %s=\"%s\"\n", getName(), content.c_str());
     conf[name] = content;
     conf.writeFile();
     navigation.pop();
     break;
-  case ADD_KEY_LLEFT:
+  case ADD_KEY_LLEFT: // Shift keyset
     if (keyset > 0)
       keyset--;
     else
       keyset = keyboard->nsets - 1;
     if (keysetpos >= strlen(keyboard->set[keyset]))
       keysetpos = 0;
-    // curchar = keyboard->set[keyset][keysetpos];
-    addChar(); //At(content, pos, curchar);
-    // Serial.printf("Switch Character sets left to %d\n", keyset);
+    addChar();
     break;
-  case ADD_KEY_LRIGHT:
+  case ADD_KEY_LRIGHT: // Shift keyset right
     if ((keyset + 1) < keyboard->nsets)
       keyset++;
     else
       keyset = 0;
     if (keysetpos >= strlen(keyboard->set[keyset]))
       keysetpos = 0;
-    // curchar = keyboard->set[keyset][keysetpos];
-    addChar(); //At(content, pos, curchar);
-    // Serial.printf("Switch Character sets right to %d\n", keyset);
+    addChar();
     break;
-  case ADD_KEY_LDOWN:
+  case ADD_KEY_LDOWN: // Delete
     keyset = 0;
     keysetpos = 0;
     if (pos < content.length())
@@ -664,9 +641,9 @@ void MenuEntry::dealButton(uint8_t k)
   switch (k)
   {
   case KEY_OK:
-  Serial.printf("Button %s pressed\n", name);
-  break;
+    Serial.printf("Button %s pressed\n", name);
+    break;
   default:
-  break;
+    break;
   }
 }
