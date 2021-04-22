@@ -45,7 +45,7 @@ const char *menujson =
           "menu" : [
             {
               "n" : "Update Confirm?",
-              "type" : "special"
+              "type" : "leaf"
             }
           ]
         },
@@ -54,19 +54,19 @@ const char *menujson =
           "menu": [
             {
               "n": "Charset1",
-              "type": "special"
+              "type": "leaf"
             },
             {
               "n": "Charset2",
-              "type": "special"
+              "type": "leaf"
             },
             {
               "n": "Charset3",
-              "type": "special"
+              "type": "leaf"
             },
             {
               "n": "Charset4",
-              "type": "special"
+              "type": "leaf"
             }
           ]
         }

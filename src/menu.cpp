@@ -27,7 +27,7 @@ charset punc_chars = "!\"#$%&'()*+,-./:;<=>?[\\]^_{|}~";
 keyset_t num_keyset = {{num_chars}, 1};
 keyset_t text_keyset = {{alpha_chars, ALPHA_chars, num_chars, punc_chars}, 4};
 
-void (*MenuEntry::specialCallback)(const char *) = NULL;
+void (*MenuEntry::leafCallback)(const char *) = NULL;
 
 void MenuEntry::addChar()
 {
@@ -148,15 +148,10 @@ void MenuEntry::build(JsonObject &obj)
       keyboard = &num_keyset;
       setType(NUM_TYPE);
     }
-    else if (strcmp(t, "special") == 0)
+    else if (strcmp(t, "leaf") == 0)
     {
-      setType(SPECIAL_TYPE);
+      setType(LEAF_TYPE);
     }
-    /*
-    for (int i = 0; i < level; i++)
-      Serial.print("  ");
-    Serial.printf("Leaf: type is %s\n", (const char *)obj["type"]);
-    */
   }
   else
   {
@@ -229,11 +224,11 @@ void MenuEntry::output(FrameBuffer &fb)
     }
   }
   break;
-  case SPECIAL_TYPE:
+  case LEAF_TYPE:
   {
-    Serial.printf("Special %s\n", name);
-    if (specialCallback)
-      specialCallback(name);
+    Serial.printf("Leaf %s\n", name);
+    if (leafCallback)
+      leafCallback(name);
   }
   break;
   default:
@@ -350,7 +345,7 @@ void MenuEntry::deal(uint8_t k)
     dealMenu(k);
     break;
   default:
-    dealLeaf(k);
+    dealInput(k);
   }
 }
 
@@ -374,7 +369,7 @@ void MenuEntry::dealMenu(uint8_t k)
   }
 }
 
-void MenuEntry::dealLeaf(uint8_t k)
+void MenuEntry::dealInput(uint8_t k)
 {
   switch (k)
   {

@@ -465,9 +465,9 @@ void displayCharset(int set)
     fb.display(lcd);
 }
 
-void specialPress(const char *name)
+void leafHandler(const char *name)
 {
-    Serial.printf("Special %s\n", name);
+    Serial.printf("Leaf %s\n", name);
     if (strcmp(name, "Update Confirm?") == 0)
     {
         systemUpdate("http://192.168.0.101/bin/puffin.bin");
@@ -511,7 +511,7 @@ void setup()
     lcd.createChar(129, block);
     lcd.createChar(0, antenna);
 
-    menuRoot.setSpecialCallback(specialPress);
+    menuRoot.setLeafCallback(leafHandler);
     menuRoot.buildmenu();
     lcd.display();
     wssetup();

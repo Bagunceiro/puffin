@@ -16,7 +16,7 @@ enum MenuEntryType {
     MENU_TYPE,
     TEXT_TYPE,
     NUM_TYPE,
-    SPECIAL_TYPE
+    LEAF_TYPE
 };
 
 typedef const char *charset;
@@ -49,7 +49,7 @@ public:
     }
     void selectplus() { if (++selected >= (int)entries.size()) selected--; }
     void selectminus() { if (selected > 0 ) selected--; }
-    void dealLeaf(uint8_t key);
+    void dealInput(uint8_t key);
     void dealMenu(uint8_t key);
     void deal(uint8_t key);
     Menu entries;
@@ -59,7 +59,7 @@ public:
     keyset_t* keyboard;
     unsigned int keyset;
     unsigned int keysetpos;
-    void setSpecialCallback(void(*cb)(const char*)) { specialCallback = cb; }
+    void setLeafCallback(void(*cb)(const char*)) { leafCallback = cb; }
 
 private:
     MenuEntryType type;
@@ -67,7 +67,7 @@ private:
     char name[20];
     int selected;
     int startDisplayAt;
-    static void(*specialCallback)(const char*);
+    static void(*leafCallback)(const char*);
 };
 
 typedef std::stack<MenuEntry *> BreadCrumb;
