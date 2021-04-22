@@ -5,6 +5,14 @@
       "n": "WiFi",
       "menu": [
         {
+          "n" : "Connect to WiFi",
+          "leaf" : "conwifi"
+        },
+        {
+          "n" : "Disconnect WiFi",
+          "leaf" : "diswifi"
+        },
+        {
           "n": "SSID",
           "type": "text"
         },
@@ -43,11 +51,20 @@
       "n": "System",
       "menu": [
         {
+          "n": "System Reset",
+          "menu" : [
+            {
+              "n" : "Reset Confirm?",
+              "leaf" : "reset"
+            }
+          ]
+        },
+        {
           "n": "System Update",
           "menu" : [
             {
               "n" : "Update Confirm?",
-              "type" : "leaf"
+              "leaf" : "update"
             }
           ]
         },
@@ -56,19 +73,19 @@
           "menu": [
             {
               "n": "Charset1",
-              "type": "leaf"
+              "leaf" : "char1"
             },
             {
               "n": "Charset2",
-              "type": "leaf"
+              "leaf" : "char2"
             },
             {
               "n": "Charset3",
-              "type": "leaf"
+              "leaf" : "char3"
             },
             {
               "n": "Charset4",
-              "type": "leaf"
+              "leaf" : "char4"
             }
           ]
         }

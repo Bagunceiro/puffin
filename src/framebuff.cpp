@@ -85,11 +85,12 @@ bool FrameBuffer::display(LiquidCrystal_I2C &lcd)
     return true;
 }
 
+/*
 void FrameBuffer::dump()
 {
     for (int b = 0; b < 2; b++)
     {
-        Serial.printf("Frambuffer %d\n", b);
+        Serial.printf("Framebuffer %d\n", b);
         for (int r = 0; r < 4; r++)
         {
             Serial.print("|");
@@ -101,6 +102,7 @@ void FrameBuffer::dump()
         }
     }
 }
+*/
 
 size_t FrameBuffer::write(uint8_t c)
 {

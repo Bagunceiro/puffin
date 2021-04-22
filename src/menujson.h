@@ -7,12 +7,24 @@ const char *menujson =
       "n": "WiFi",
       "menu": [
         {
+          "n" : "Connect to WiFi",
+          "leaf" : "conwifi"
+        },
+        {
+          "n" : "Disconnect WiFi",
+          "leaf" : "diswifi"
+        },
+        {
           "n": "SSID",
           "type": "text"
         },
         {
           "n": "PSK",
           "type": "text"
+        },
+        {
+          "n": "WPS",
+          "type": "button"
         }
       ]
     },
@@ -41,11 +53,20 @@ const char *menujson =
       "n": "System",
       "menu": [
         {
+          "n": "System Reset",
+          "menu" : [
+            {
+              "n" : "Reset Confirm?",
+              "leaf" : "reset"
+            }
+          ]
+        },
+        {
           "n": "System Update",
           "menu" : [
             {
               "n" : "Update Confirm?",
-              "type" : "leaf"
+              "leaf" : "update"
             }
           ]
         },
@@ -54,19 +75,19 @@ const char *menujson =
           "menu": [
             {
               "n": "Charset1",
-              "type": "leaf"
+              "leaf" : "char1"
             },
             {
               "n": "Charset2",
-              "type": "leaf"
+              "leaf" : "char2"
             },
             {
               "n": "Charset3",
-              "type": "leaf"
+              "leaf" : "char3"
             },
             {
               "n": "Charset4",
-              "type": "leaf"
+              "leaf" : "char4"
             }
           ]
         }
@@ -75,3 +96,28 @@ const char *menujson =
   ]
 }
 )--";
+
+/*
+,
+        {
+          "n": "Charset",
+          "menu": [
+            {
+              "n": "Charset1",
+              "leaf" : "char1"
+            },
+            {
+              "n": "Charset2",
+              "leaf" : "char2"
+            },
+            {
+              "n": "Charset3",
+              "leaf" : "char3"
+            },
+            {
+              "n": "Charset4",
+              "leaf" : "char4"
+            }
+          ]
+        }
+*/

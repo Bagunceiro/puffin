@@ -95,6 +95,7 @@ void menuRemove()
 MenuEntry::MenuEntry()
 {
   name[0] = '\0';
+  leafkey[0] = '\0';
   selected = 0;
   startDisplayAt = 0;
   pos = 0;
@@ -135,7 +136,7 @@ void MenuEntry::build(JsonObject &obj)
       entries.push_back(m);
     }
   }
-  else if (obj["type"])
+  if (obj["type"])
   {
     const char *t = obj["type"];
     if (strcmp(t, "text") == 0)
@@ -153,20 +154,18 @@ void MenuEntry::build(JsonObject &obj)
       setType(LEAF_TYPE);
     }
   }
-  else
+  if (obj["leaf"])
   {
-    /*
-    for (int i = 0; i < level; i++)
-      Serial.print("  ");
-    Serial.println("Don't know what to do with it");
-    */
+    const char *l = obj["leaf"];
+    setType(LEAF_TYPE);
+    strncpy(leafkey, l, sizeof(name) - 1);
   }
   level--;
 }
 
 void MenuEntry::buildmenu()
 {
-  StaticJsonDocument<1024> doc;
+  StaticJsonDocument<1536> doc;
   DeserializationError error = deserializeJson(doc, menujson);
   if (error)
   {
@@ -226,9 +225,13 @@ void MenuEntry::output(FrameBuffer &fb)
   break;
   case LEAF_TYPE:
   {
-    Serial.printf("Leaf %s\n", name);
+    const char* key = leafkey;
+    if (key == NULL)
+    {
+      key = name;
+    }
     if (leafCallback)
-      leafCallback(name);
+      leafCallback(key);
   }
   break;
   default:

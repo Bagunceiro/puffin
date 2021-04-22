@@ -65,6 +65,7 @@ private:
     MenuEntryType type;
     void addChar();
     char name[20];
+    char leafkey[10];
     int selected;
     int startDisplayAt;
     static void(*leafCallback)(const char*);

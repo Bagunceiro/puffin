@@ -21,7 +21,7 @@ class FrameBuffer : public Stream
     int available() override { return 0; }
     int read() override { return 0; }
     int peek() override { return 0; }
-    void dump();
+    // void dump();
 
     private:
     uint8_t cols;

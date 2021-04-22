@@ -34,6 +34,7 @@ extern LiquidCrystal_I2C lcd;
 extern void wssetup();
 extern AsyncEventSource events;
 bool wifiConnected = false;
+bool wasWiFiConnected = false;
 ConfBlk conf("puffin.json");
 
 WiFiClient mqttWifiClient;
@@ -88,7 +89,6 @@ t_httpUpdate_return systemUpdate(const String &url)
 
     fb.clear();
     fb.setTitle("System Updating");
-    fb.dump();
 
     t_httpUpdate_return ret = ESPhttpUpdate.update(httpclient, url);
 
@@ -168,6 +168,7 @@ void mqttloop()
             }
         }
     }
+    else mqttConnected = false;
 }
 
 const char block[8] =
@@ -419,7 +420,6 @@ void wifiloop()
     if (conf[ssid_n].length() > 0)
     {
         wifiConnected = false;
-        static bool wasWiFiConnected = false;
 
         if (WiFi.status() == WL_CONNECTED)
         {
@@ -465,32 +465,48 @@ void displayCharset(int set)
     fb.display(lcd);
 }
 
-void leafHandler(const char *name)
+void leafHandler(const char *key)
 {
-    Serial.printf("Leaf %s\n", name);
-    if (strcmp(name, "Update Confirm?") == 0)
+    Serial.printf("Leaf %s\n", key);
+    if (strcmp(key, "update") == 0)
     {
         systemUpdate("http://192.168.0.101/bin/puffin.bin");
     }
-    if (strcmp(name, "Charset1") == 0)
+    if (strcmp(key, "conwifi") == 0)
     {
-        //measurement_task.disable();
+        fb.clear();
+        fb.setCursor(0,2);
+        fb.setTitle("Connecting to WiFi");
+        wifi_task.enable();
+    }
+    if (strcmp(key, "diswifi") == 0)
+    {
+        WiFi.disconnect();
+        fb.clear();
+        fb.setCursor(0,2);
+        fb.print("WiFi disconnected");
+        wifiConnected = false;
+        wifi_task.disable();      
+    }
+    if (strcmp(key, "reset") == 0)
+    {
+        ESP.restart();
+    }
+    if (strcmp(key, "char1") == 0)
+    {
         displayCharset(0);
     }
-    else if (strcmp(name, "Charset2") == 0)
+    else if (strcmp(key, "char2") == 0)
     {
-        //measurement_task.disable();
         displayCharset(1);
     }
-    if (strcmp(name, "Charset3") == 0)
+    if (strcmp(key, "char3") == 0)
     {
-        measurement_task.disable();
-        //displayCharset(2);
+        displayCharset(2);
     }
-    else if (strcmp(name, "Charset4") == 0)
+    else if (strcmp(key, "char4") == 0)
     {
-        measurement_task.disable();
-        //displayCharset(3);
+        displayCharset(3);
     }
 }
 
