@@ -1,64 +1,11 @@
 #pragma once
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <map>
 #include <vector>
 #include <stack>
 #include <LiquidCrystal_I2C.h>
 
 #include "framebuff.h"
-
-class ScreenField
-{
-public:
-    ScreenField(const uint8_t _x, const uint8_t _y, const uint8_t _l);
-    ScreenField();
-    virtual ~ScreenField();
-
-    bool overlaps(const ScreenField &field) const;
-    uint8_t start() const { return x; }
-    uint8_t end() const { return length + x - 1; }
-
-    int display(const char *val);
-
-    void dump() const
-    {
-        Serial.printf(" %d, %d, %d\n", x, y, length);
-    }
-
-private:
-    uint8_t x;
-    uint8_t y;
-    uint8_t length;
-};
-
-typedef std::map<const char *, ScreenField> ScreenFieldList;
-
-class Screen
-{
-public:
-    enum idcode
-    {
-        MAIN_SCREEN,
-        TOP_MENU,
-        WIFI_MENU
-    };
-    Screen(const uint8_t _cols = 20, const uint8_t _rows = 4);
-    Screen(const Screen &);
-    Screen &operator=(const Screen &);
-    virtual ~Screen();
-
-    bool addField(const char *name, const ScreenField &f);
-    int display(const char *fieldname, const char *val);
-    static void build();
-
-    void dump();
-
-private:
-    ScreenFieldList fields;
-    uint8_t cols;
-    uint8_t rows;
-};
 
 class MenuEntry;
 
@@ -69,7 +16,7 @@ enum MenuEntryType {
     MENU_TYPE,
     TEXT_TYPE,
     NUM_TYPE,
-    BUTTON_TYPE
+    SPECIAL_TYPE
 };
 
 typedef const char *charset;
@@ -104,10 +51,7 @@ public:
     void selectminus() { if (selected > 0 ) selected--; }
     void dealLeaf(uint8_t key);
     void dealMenu(uint8_t key);
-    void dealButton(uint8_t key);
     void deal(uint8_t key);
-    // void key(uint8_t k);
-    // void render();
     Menu entries;
     void reset();
     String content;
@@ -115,7 +59,7 @@ public:
     keyset_t* keyboard;
     unsigned int keyset;
     unsigned int keysetpos;
-    void setButtonCallback(void(*cb)(const char*)) { buttonCallback = cb; }
+    void setSpecialCallback(void(*cb)(const char*)) { specialCallback = cb; }
 
 private:
     MenuEntryType type;
@@ -123,8 +67,7 @@ private:
     char name[20];
     int selected;
     int startDisplayAt;
-    static void(*buttonCallback)(const char*);
+    static void(*specialCallback)(const char*);
 };
 
 typedef std::stack<MenuEntry *> BreadCrumb;
-typedef std::map<const char *, Screen> ScreenList;

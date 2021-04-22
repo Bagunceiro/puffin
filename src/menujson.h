@@ -13,10 +13,6 @@ const char *menujson =
         {
           "n": "PSK",
           "type": "text"
-        },
-        {
-          "n": "WPS",
-          "type": "button"
         }
       ]
     },
@@ -44,6 +40,36 @@ const char *menujson =
     {
       "n": "System",
       "menu": [
+        {
+          "n": "System Update",
+          "menu" : [
+            {
+              "n" : "Update Confirm?",
+              "type" : "special"
+            }
+          ]
+        },
+        {
+          "n": "Charset",
+          "menu": [
+            {
+              "n": "Charset1",
+              "type": "special"
+            },
+            {
+              "n": "Charset2",
+              "type": "special"
+            },
+            {
+              "n": "Charset3",
+              "type": "special"
+            },
+            {
+              "n": "Charset4",
+              "type": "special"
+            }
+          ]
+        }
       ]
     }
   ]

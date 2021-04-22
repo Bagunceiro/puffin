@@ -43,6 +43,7 @@ void FrameBuffer::clear(uint8_t buf)
             charArray[buf][r][c] = ' '; // '0' + (c % 10);
         }
     }
+    if (clearCB) clearCB();
     offsetrow = 0;
     offsetcol = 0;
     curx = 0;
@@ -75,12 +76,30 @@ bool FrameBuffer::display(LiquidCrystal_I2C &lcd)
                         charArray[1][r + offsetrow][c + offsetcol] = charArray[0][r + offsetrow][c + offsetcol];
                         wrote = true;
                     }
-                    else wrote = false;
+                    else
+                        wrote = false;
                 }
             }
         }
     }
     return true;
+}
+
+void FrameBuffer::dump()
+{
+    for (int b = 0; b < 2; b++)
+    {
+        Serial.printf("Frambuffer %d\n", b);
+        for (int r = 0; r < 4; r++)
+        {
+            Serial.print("|");
+            for (int c = 0; c < 20; c++)
+            {
+                Serial.print(charArray[b][r + offsetrow][c + offsetcol]);
+            }
+            Serial.println("|");
+        }
+    }
 }
 
 size_t FrameBuffer::write(uint8_t c)
@@ -108,8 +127,7 @@ size_t FrameBuffer::write(uint8_t c)
 
 void FrameBuffer::setTitle(const char *t)
 {
-    // fixedTitle = true;
-    writeField(0,0,20,t);
+    writeField(0, 0, 20, t);
     setCursor(0, 1);
 }
 

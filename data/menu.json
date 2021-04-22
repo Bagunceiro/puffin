@@ -1,4 +1,5 @@
 {
+  "n": "Main",
   "menu": [
     {
       "n": "WiFi",
@@ -12,8 +13,8 @@
           "type": "text"
         },
         {
-          "n": "WSP",
-          "type": "checkbox"
+          "n": "WPS",
+          "type": "button"
         }
       ]
     },
@@ -35,6 +36,41 @@
         {
           "n": "MQTT Password",
           "type": "text"
+        }
+      ]
+    },
+    {
+      "n": "System",
+      "menu": [
+        {
+          "n": "System Update",
+          "menu" : [
+            {
+              "n" : "Update Confirm?",
+              "type" : "special"
+            }
+          ]
+        },
+        {
+          "n": "Charset",
+          "menu": [
+            {
+              "n": "Charset1",
+              "type": "special"
+            },
+            {
+              "n": "Charset2",
+              "type": "special"
+            },
+            {
+              "n": "Charset3",
+              "type": "special"
+            },
+            {
+              "n": "Charset4",
+              "type": "special"
+            }
+          ]
         }
       ]
     }

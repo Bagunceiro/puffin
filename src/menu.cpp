@@ -4,12 +4,10 @@
 #include "framebuff.h"
 #include "config.h"
 
-LiquidCrystal_I2C lcd(0x27, 20, 4);
+extern LiquidCrystal_I2C lcd;
 
-ScreenList screens;
 MenuEntry menuRoot;
 
-#include "screensjson.h"
 #include "menujson.h"
 
 extern BreadCrumb navigation;
@@ -29,7 +27,7 @@ charset punc_chars = "!\"#$%&'()*+,-./:;<=>?[\\]^_{|}~";
 keyset_t num_keyset = {{num_chars}, 1};
 keyset_t text_keyset = {{alpha_chars, ALPHA_chars, num_chars, punc_chars}, 4};
 
-void(*MenuEntry::buttonCallback)(const char*) = NULL;
+void (*MenuEntry::specialCallback)(const char *) = NULL;
 
 void MenuEntry::addChar()
 {
@@ -94,55 +92,6 @@ void menuRemove()
   }
 }
 
-void dumpScreens()
-{
-  for (auto it : screens)
-  {
-    Serial.printf("%s\n", it.first);
-    it.second.dump();
-  }
-}
-
-void Screen::build()
-{
-  StaticJsonDocument<1024> doc;
-  DeserializationError error = deserializeJson(doc, screenjson);
-  if (error)
-  {
-    Serial.println("screens desc deserialisation error");
-  }
-  else
-  {
-    JsonObject root = doc.as<JsonObject>();
-    JsonArray arrayOfScreens = root["screen"].as<JsonArray>();
-    for (JsonObject screenDesc : arrayOfScreens)
-    {
-      std::pair<ScreenList::iterator, bool> ret;
-      Screen tempsc;
-      ret = screens.insert({(const char *)screenDesc["name"], tempsc});
-
-      if (ret.second == false)
-      {
-        Serial.printf("Duplicate Screen name %s\n", (const char *)screenDesc["name"]);
-      }
-      else
-      {
-        Screen &sc = screens[screenDesc["name"]];
-
-        JsonArray arrayOfFields = screenDesc["field"].as<JsonArray>();
-        for (JsonObject fieldDesc : arrayOfFields)
-        {
-          ScreenField sf((const uint8_t)fieldDesc["x"], (const uint8_t)fieldDesc["y"], (const uint8_t)fieldDesc["l"]);
-          sc.addField((const char *)fieldDesc["name"], sf);
-        }
-      }
-    }
-  }
-  Serial.println("---- Sceen List Built ----");
-  dumpScreens();
-  Serial.println("---- ^^^^^^^^^^^^^^^^ ----");
-}
-
 MenuEntry::MenuEntry()
 {
   name[0] = '\0';
@@ -163,19 +112,20 @@ void MenuEntry::build(JsonObject &obj)
   setType(MENU_TYPE);
   if (obj["n"])
   {
+    /*
     for (int i = 0; i < level; i++)
       Serial.print("  ");
     Serial.printf("%s\n", (const char *)obj["n"]);
+    */
     strncpy(name, (const char *)obj["n"], sizeof(name) - 1);
   }
   else
   {
-    Serial.println("No name");
+    // Serial.println("No name");
   }
 
   if (obj["menu"])
   {
-    // Serial.println("It's a menu");
     JsonArray menuArray = obj["menu"].as<JsonArray>();
     for (JsonObject item : menuArray)
     {
@@ -198,19 +148,23 @@ void MenuEntry::build(JsonObject &obj)
       keyboard = &num_keyset;
       setType(NUM_TYPE);
     }
-    else if (strcmp(t, "button") == 0)
+    else if (strcmp(t, "special") == 0)
     {
-      setType(BUTTON_TYPE);
+      setType(SPECIAL_TYPE);
     }
+    /*
     for (int i = 0; i < level; i++)
       Serial.print("  ");
     Serial.printf("Leaf: type is %s\n", (const char *)obj["type"]);
+    */
   }
   else
   {
+    /*
     for (int i = 0; i < level; i++)
       Serial.print("  ");
     Serial.println("Don't know what to do with it");
+    */
   }
   level--;
 }
@@ -226,7 +180,7 @@ void MenuEntry::buildmenu()
   }
   JsonObject root = doc.as<JsonObject>();
   menuRoot.build(root);
-  menuRoot.dump();
+  // menuRoot.dump();
 }
 
 void MenuEntry::reset()
@@ -240,16 +194,7 @@ void MenuEntry::reset()
   }
 }
 
-void Screen::dump()
-{
-  ScreenFieldList::iterator it;
-  for (it = fields.begin(); it != fields.end(); ++it)
-  {
-    Serial.printf(" Field %s\n", (const char *)it->first);
-    ((ScreenField &)it->second).dump();
-  }
-}
-
+/*
 void MenuEntry::dump(int level)
 {
   for (int i = 0; i < level; i++)
@@ -261,99 +206,7 @@ void MenuEntry::dump(int level)
     m.dump(level + 1);
   }
 }
-
-ScreenField::ScreenField(const uint8_t _x, const uint8_t _y, const uint8_t _l)
-{
-  x = _x;
-  y = _y;
-  length = _l;
-}
-
-ScreenField::ScreenField()
-{
-  x = 0;
-  y = 0;
-  length = 0;
-}
-
-ScreenField::~ScreenField()
-{
-}
-
-int ScreenField::display(const char *val)
-{
-  char buff[length + 1];
-  int l = strlen(val);
-
-  strncpy(buff, val, length);
-  lcd.setCursor(x, y);
-  lcd.print(buff);
-  for (int i = l; i < length; i++)
-  {
-    lcd.print(' ');
-  }
-  return l;
-}
-
-Screen::Screen(const uint8_t _cols, const uint8_t _rows)
-{
-  cols = _cols;
-  rows = _rows;
-}
-
-Screen::~Screen()
-{
-}
-
-Screen::Screen(const Screen &rhs)
-{
-  // fields = rhs.fields;
-  *this = rhs;
-}
-
-Screen &Screen::operator=(const Screen &rhs)
-{
-  rows = rhs.rows;
-  cols = rhs.cols;
-  fields = rhs.fields;
-  return *this;
-}
-
-bool ScreenField::overlaps(const ScreenField &field) const
-{
-  if (y == field.y)
-  {
-    if ((start() >= field.start() && start() <= field.end()) || (end() >= field.start() && end() <= field.end()))
-    {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool Screen::addField(const char *fieldname, const ScreenField &newfield)
-{
-  for (auto const &f : fields)
-  {
-    if (newfield.overlaps(f.second))
-    {
-      Serial.printf("%s overlaps with %s\n", fieldname, f.first);
-    }
-  }
-  fields[fieldname] = newfield;
-  return true;
-}
-
-int Screen::display(const char *fieldname, const char *val)
-{
-  auto search = fields.find(fieldname);
-  if (search != fields.end())
-  {
-    ScreenField &f = search->second;
-    return f.display(val);
-  }
-  return -1;
-}
+*/
 
 void MenuEntry::output(FrameBuffer &fb)
 {
@@ -376,10 +229,11 @@ void MenuEntry::output(FrameBuffer &fb)
     }
   }
   break;
-  case BUTTON_TYPE:
+  case SPECIAL_TYPE:
   {
-    fb.setCursor(9, 2);
-    fb.print('O');
+    Serial.printf("Special %s\n", name);
+    if (specialCallback)
+      specialCallback(name);
   }
   break;
   default:
@@ -449,11 +303,6 @@ void keyup(uint8_t k, unsigned long durn)
       lcd.setCursor(current->pos, 2);
       lcd.blink_on();
       break;
-    case BUTTON_TYPE:
-      current->output(fb);
-      lcd.setCursor(9, 2);
-      lcd.blink_on();
-      break;
     case MENU_TYPE:
     default:
       current->output(fb);
@@ -499,9 +348,6 @@ void MenuEntry::deal(uint8_t k)
   {
   case MENU_TYPE:
     dealMenu(k);
-    break;
-  case BUTTON_TYPE:
-    dealButton(k);
     break;
   default:
     dealLeaf(k);
@@ -591,18 +437,5 @@ void MenuEntry::dealLeaf(uint8_t k)
   if (content.length() >= pos)
   {
     keyboard->findKey(content[pos], keyset, keysetpos);
-  }
-}
-
-void MenuEntry::dealButton(uint8_t k)
-{
-  switch (k)
-  {
-  case KEY_OK:
-    Serial.printf("Button %s pressed\n", name);
-    if (buttonCallback) buttonCallback(name);
-    break;
-  default:
-    break;
   }
 }

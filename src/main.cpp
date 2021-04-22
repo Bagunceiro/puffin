@@ -12,6 +12,9 @@
 #include <ESPAsyncWebServer.h>
 #include <TaskScheduler.h>
 #include <LittleFS.h>
+#include <ESP8266httpUpdate.h>
+#include <TZ.h>
+#include <coredecls.h>
 
 #include "config.h"
 #include "framebuff.h"
@@ -20,8 +23,10 @@
 
 #define serr Serial
 
-bool testmode = false;;
+bool testmode = false;
+;
 
+LiquidCrystal_I2C lcd(0x27, 20, 4);
 BreadCrumb navigation;
 
 PZEM004Tv30 pzem(14, 12);
@@ -50,20 +55,67 @@ Task mqtt_task(500, TASK_FOREVER, &mqttloop, &ts, true);
 
 FrameBuffer fb(20, 10);
 
-void wpsInit()
-{
-    /*
-    esp_wps_config_t wpsconfig;
+const char *version = __TIME__;
 
-    wpsconfig.crypto_funcs = &g_wifi_default_wps_crypto_funcs;
-    wpsconfig.wps_type = WPS_TYPE_PBC;
-    strcpy(wpsconfig.factory_info.manufacturer, "PA");
-    strcpy(wpsconfig.factory_info.model_number, "1");
-    strcpy(wpsconfig.factory_info.model_name, "Conchita");
-    strcpy(wpsconfig.factory_info.device_name, "ESP32");
-    esp_wifi_wps_enable(&wpsconfig);
-    esp_wifi_wps_start(0);
-    */
+void reportProgress(size_t completed, size_t total)
+{
+    static int oldPhase = 1;
+    int progress = (completed * 100) / total;
+
+    int phase = (progress / 5) % 2; // report at 5% intervals
+
+    if (phase != oldPhase)
+    {
+        char buffer[8];
+        snprintf(buffer, 8, "%3d%%", progress);
+        Serial.printf("%3d%% (%d/%d)\n", progress, completed, total);
+        fb.writeField(5, 2, 15, buffer);
+        fb.display(lcd);
+        oldPhase = phase;
+    }
+}
+
+t_httpUpdate_return systemUpdate(const String &url)
+{
+    WiFiClient httpclient;
+    char buffer[22];
+
+    measurement_task.disable();
+
+    ESPhttpUpdate.rebootOnUpdate(false);
+
+    Update.onProgress(reportProgress);
+
+    fb.clear();
+    fb.setTitle("System Updating");
+    fb.dump();
+
+    t_httpUpdate_return ret = ESPhttpUpdate.update(httpclient, url);
+
+    switch (ret)
+    {
+    case HTTP_UPDATE_FAILED:
+        Serial.printf("Update fail error (%d): %s\n",
+                      ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+        snprintf(buffer, 20, "Failed(%d)", ESPhttpUpdate.getLastError());
+        fb.writeField(0, 2, 20, buffer);
+        break;
+
+    case HTTP_UPDATE_NO_UPDATES:
+        Serial.println("No update file available");
+        fb.writeField(0, 2, 20, "No update available");
+        break;
+
+    case HTTP_UPDATE_OK:
+        Serial.println("System updated");
+        fb.setTitle("Reseting");
+        fb.writeField(4, 2, 20, "Please Wait");
+        fb.display(lcd);
+        ESP.restart();
+        break;
+    }
+    fb.display(lcd);
+    return ret;
 }
 
 bool mqttinit()
@@ -79,7 +131,7 @@ bool mqttinit()
 
         String clientID = String("Puffin_") + String(millis() % 1000);
 
-        mqttClient.setServer("192.168.0.101", 1883);
+        mqttClient.setServer(conf[mqttbroker_n].c_str(), 1883);
 
         if (mqttClient.connect(clientID.c_str(),
                                "ctlr",
@@ -118,6 +170,16 @@ void mqttloop()
     }
 }
 
+const char block[8] =
+    {
+        0b11111,
+        0b11111,
+        0b11111,
+        0b11111,
+        0b11111,
+        0b11111,
+        0b11111,
+        0b11111};
 const char antenna[8] =
     {
         0b10101,
@@ -126,8 +188,48 @@ const char antenna[8] =
         0b00100,
         0b00100,
         0b00100,
+        0b00100,
+        0b00000};
+const char working1[8] =
+    {
+        0b11111,
+        0b11111,
+        0b00000,
+        0b00000,
+        0b00000,
+        0b00000,
         0b00000,
         0b00000};
+const char working2[8] =
+    {
+        0b00000,
+        0b00000,
+        0b11111,
+        0b11111,
+        0b00000,
+        0b00000,
+        0b00000,
+        0b00000};
+const char working3[8] =
+    {
+        0b00000,
+        0b00000,
+        0b00000,
+        0b00000,
+        0b11111,
+        0b11111,
+        0b00000,
+        0b00000};
+const char working4[8] =
+    {
+        0b00000,
+        0b00000,
+        0b00000,
+        0b00000,
+        0b00000,
+        0b00000,
+        0b11111,
+        0b11111};
 
 extern void checkMenu();
 extern MenuEntry menuRoot;
@@ -166,10 +268,34 @@ char *sigfigs(const float val, const int figs, char *buffer)
     return buffer;
 }
 
+void displayStatus()
+{
+    static int indic = 0;
+    switch (indic)
+    {
+    case 0:
+        lcd.createChar(1, working1);
+        break;
+    case 1:
+        lcd.createChar(1, working2);
+        break;
+    case 2:
+        lcd.createChar(1, working3);
+        break;
+    case 3:
+        lcd.createChar(1, working4);
+        break;
+    }
+    if (++indic >= 4)
+        indic = 0;
+    fb.setCursor(17, 0);
+    fb.write(mqttConnected ? 'M' : ' ');
+    fb.write(wifiConnected ? byte(0) : ' ');
+    fb.write(1);
+}
+
 void doMeasurements()
 {
-    // pzem.updateValues();
-
     float v;
     float a;
     float hz;
@@ -184,7 +310,7 @@ void doMeasurements()
     }
     else
     {
-        v  = (1295 + random(10)) / 10.0;
+        v = (1295 + random(10)) / 10.0;
         a = (800.0 + random(300)) / 1000;
         pf = (85 + random(10)) / 100.0;
         hz = (590 + random(10)) / 10.0;
@@ -273,14 +399,8 @@ void doMeasurements()
     if (onMainScreen)
         fb.writeField(10, 3, 10, ds);
     events.send(ds, "ap power", millis());
-    if (onMainScreen)
-    {
-        fb.setTitle("TEST MODE");
-        fb.setCursor(18, 0);
-        fb.write(mqttConnected ? 'M' : ' ');
-        fb.write(wifiConnected ? byte(0) : ' ');
-        fb.display(lcd);
-    }
+    displayStatus();
+    fb.display(lcd);
 }
 
 void keyup(uint8_t k, unsigned long);
@@ -308,6 +428,7 @@ void wifiloop()
             {
                 wasWiFiConnected = true;
                 Serial.printf("WiFi Connected - IP %s\n", WiFi.localIP().toString().c_str());
+                Serial.printf("Connected to %s/%s\n", WiFi.SSID().c_str(), WiFi.psk().c_str());
             }
             // mqttpoll();
         }
@@ -329,21 +450,54 @@ void wifiloop()
     }
 }
 
-void buttonPress(const char* name)
+void displayCharset(int set)
 {
-    if (strcmp(name,"WPS") == 0)
+    fb.clear();
+    int start = set * 64;
+    for (int r = 0; r < 4; r++)
     {
-        Serial.println("Trigger WPS");
+        fb.setCursor(0, r);
+        for (int i = 0; i < 16; i++)
+        {
+            fb.write(byte(start + (r * 16) + i));
+        }
     }
-    else
+    fb.display(lcd);
+}
+
+void specialPress(const char *name)
+{
+    Serial.printf("Special %s\n", name);
+    if (strcmp(name, "Update Confirm?") == 0)
     {
-        Serial.printf("Unknown button %s\n", name);
+        systemUpdate("http://192.168.0.101/bin/puffin.bin");
+    }
+    if (strcmp(name, "Charset1") == 0)
+    {
+        //measurement_task.disable();
+        displayCharset(0);
+    }
+    else if (strcmp(name, "Charset2") == 0)
+    {
+        //measurement_task.disable();
+        displayCharset(1);
+    }
+    if (strcmp(name, "Charset3") == 0)
+    {
+        measurement_task.disable();
+        //displayCharset(2);
+    }
+    else if (strcmp(name, "Charset4") == 0)
+    {
+        measurement_task.disable();
+        //displayCharset(3);
     }
 }
 
 void setup()
 {
     Serial.begin(9600);
+    configTime(TZ_America_Sao_Paulo, "pool.ntp.org");
     LittleFS.begin();
     if (conf.readFile())
     {
@@ -352,22 +506,16 @@ void setup()
     Wire.begin(5, 4);
     lcd.init();
     lcd.backlight();
-
     WiFi.mode(WIFI_STA);
 
+    lcd.createChar(129, block);
     lcd.createChar(0, antenna);
 
-    Screen::build();
-    menuRoot.setButtonCallback(buttonPress);
+    menuRoot.setSpecialCallback(specialPress);
     menuRoot.buildmenu();
     lcd.display();
     wssetup();
-
-    if (isnan(pzem.voltage()))
-    {
-        Serial.println("TEST MODE");
-        testmode = true;
-    }
+    fb.onClear(displayStatus);
 }
 
 void loop()
