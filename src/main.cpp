@@ -35,7 +35,7 @@ extern void wssetup();
 extern AsyncEventSource events;
 bool wifiConnected = false;
 bool wasWiFiConnected = false;
-ConfBlk conf("puffin.json");
+ConfBlk conf("/puffin.json");
 
 WiFiClient mqttWifiClient;
 PubSubClient mqttClient(mqttWifiClient);
@@ -400,6 +400,7 @@ void doMeasurements()
     if (onMainScreen)
         fb.writeField(10, 3, 10, ds);
     events.send(ds, "ap power", millis());
+    if (onMainScreen) fb.setTitle("");
     displayStatus();
     fb.display(lcd);
 }
@@ -515,16 +516,21 @@ void setup()
     Serial.begin(9600);
     configTime(TZ_America_Sao_Paulo, "pool.ntp.org");
     LittleFS.begin();
+    
     if (conf.readFile())
     {
+        Serial.println("== Config ==");
         conf.dump(Serial);
+    }
+    else
+    {
+        Serial.println("Could not open config file\n");
     }
     Wire.begin(5, 4);
     lcd.init();
     lcd.backlight();
     WiFi.mode(WIFI_STA);
 
-    lcd.createChar(129, block);
     lcd.createChar(0, antenna);
 
     menuRoot.setLeafCallback(leafHandler);

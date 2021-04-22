@@ -17,12 +17,17 @@ void ConfBlk::dump(Stream &s) const
 
 bool ConfBlk::writeStream(Stream &s) const
 {
+    Serial.printf("Writing\n");
     StaticJsonDocument<512> doc;
     for (auto iterator : *this)
     {
         doc[iterator.first] = iterator.second;
     }
     serializeJson(doc, s);
+
+    String ss;
+    serializeJson(doc, ss);
+    Serial.println(ss);
 
     return true;
 }
@@ -31,6 +36,7 @@ bool ConfBlk::writeFile() const
 {
     bool result = false;
 
+    Serial.printf("opening %s\n", _fileName.c_str());
     File configFile = LittleFS.open(_fileName, "w");
     if (!configFile)
     {
@@ -44,7 +50,6 @@ bool ConfBlk::writeFile() const
         configFile.close();
         result = true;
     }
-
     return result;
 }
 

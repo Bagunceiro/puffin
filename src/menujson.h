@@ -16,15 +16,11 @@ const char *menujson =
         },
         {
           "n": "SSID",
-          "type": "text"
+          "text" : "ssid"
         },
         {
           "n": "PSK",
-          "type": "text"
-        },
-        {
-          "n": "WPS",
-          "type": "button"
+          "text" : "psk"
         }
       ]
     },
@@ -33,19 +29,19 @@ const char *menujson =
       "menu": [
         {
           "n": "MQTT Broker",
-          "type": "text"
+          "text": "mqttbroker"
         },
         {
           "n": "MQTT Port",
-          "type": "num"
+          "num": "mqttport"
         },
         {
           "n": "MQTT User",
-          "type": "text"
+          "text": "mqttuser"
         },
         {
           "n": "MQTT Password",
-          "type": "text"
+          "text": "mqttpwd"
         }
       ]
     },
@@ -96,28 +92,3 @@ const char *menujson =
   ]
 }
 )--";
-
-/*
-,
-        {
-          "n": "Charset",
-          "menu": [
-            {
-              "n": "Charset1",
-              "leaf" : "char1"
-            },
-            {
-              "n": "Charset2",
-              "leaf" : "char2"
-            },
-            {
-              "n": "Charset3",
-              "leaf" : "char3"
-            },
-            {
-              "n": "Charset4",
-              "leaf" : "char4"
-            }
-          ]
-        }
-*/

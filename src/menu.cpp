@@ -99,7 +99,7 @@ MenuEntry::MenuEntry()
   selected = 0;
   startDisplayAt = 0;
   pos = 0;
-  content = "testing";
+  content = "";
   setType(MISC_TYPE);
   keyset = 0;
   keysetpos = 0;
@@ -154,11 +154,26 @@ void MenuEntry::build(JsonObject &obj)
       setType(LEAF_TYPE);
     }
   }
+
+  if (obj["text"])
+  {
+    keyboard = &text_keyset;
+    setType(TEXT_TYPE);
+    const char *k = obj["text"];
+    strncpy(leafkey, k, sizeof(leafkey) - 1);
+  }
+  if (obj["num"])
+  {
+    keyboard = &text_keyset;
+    setType(NUM_TYPE);
+    const char *k = obj["num"];
+    strncpy(leafkey, k, sizeof(leafkey) - 1);
+  }
   if (obj["leaf"])
   {
-    const char *l = obj["leaf"];
+    const char *k = obj["leaf"];
     setType(LEAF_TYPE);
-    strncpy(leafkey, l, sizeof(name) - 1);
+    strncpy(leafkey, k, sizeof(leafkey) - 1);
   }
   level--;
 }
@@ -179,28 +194,28 @@ void MenuEntry::buildmenu()
 
 void MenuEntry::reset()
 {
+  Serial.printf("MenuEntry::reset()");
   selected = 0;
-  content = conf[name];
+  content = conf[leafkey];
   pos = 0;
   if (content.length() > 0)
   {
     keyboard->findKey(content[0], keyset, keysetpos);
   }
+  // dump();
 }
 
-/*
 void MenuEntry::dump(int level)
 {
   for (int i = 0; i < level; i++)
     Serial.print(" ");
-  Serial.printf("%s:%d\n", name, type);
+  Serial.printf("%s:%d key=\"%s\" content=\"%s\"\n", name, type, leafkey, content.c_str());
   Menu::iterator it;
   for (MenuEntry &m : entries)
   {
     m.dump(level + 1);
   }
 }
-*/
 
 void MenuEntry::output(FrameBuffer &fb)
 {
@@ -225,7 +240,7 @@ void MenuEntry::output(FrameBuffer &fb)
   break;
   case LEAF_TYPE:
   {
-    const char* key = leafkey;
+    const char *key = leafkey;
     if (key == NULL)
     {
       key = name;
@@ -401,8 +416,9 @@ void MenuEntry::dealInput(uint8_t k)
   case KEY_OK:
     while (content.endsWith(" "))
       content.remove(content.length() - 1);
-    Serial.printf("Update config %s=\"%s\"\n", getName(), content.c_str());
-    conf[name] = content;
+    Serial.printf("Update config %s=\"%s\"\n", leafkey, content.c_str());
+    conf[leafkey] = content;
+    Serial.printf("Read back: %s=\"%s\"\n", leafkey, conf[leafkey].c_str());
     conf.writeFile();
     navigation.pop();
     break;

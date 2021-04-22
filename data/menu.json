@@ -14,15 +14,11 @@
         },
         {
           "n": "SSID",
-          "type": "text"
+          "text" : "ssid"
         },
         {
           "n": "PSK",
-          "type": "text"
-        },
-        {
-          "n": "WPS",
-          "type": "button"
+          "text" : "psk"
         }
       ]
     },
@@ -31,19 +27,19 @@
       "menu": [
         {
           "n": "MQTT Broker",
-          "type": "text"
+          "text": "mqttbroker"
         },
         {
           "n": "MQTT Port",
-          "type": "num"
+          "num": "mqttport"
         },
         {
           "n": "MQTT User",
-          "type": "text"
+          "text": "mqttuser"
         },
         {
           "n": "MQTT Password",
-          "type": "text"
+          "text": "mqttpwd"
         }
       ]
     },
