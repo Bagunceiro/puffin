@@ -90,15 +90,15 @@ void FrameBuffer::dump()
 {
     for (int b = 0; b < 2; b++)
     {
-        Serial.printf("Framebuffer %d\n", b);
+        serr.printf("Framebuffer %d\n", b);
         for (int r = 0; r < 4; r++)
         {
-            Serial.print("|");
+            serr.print("|");
             for (int c = 0; c < 20; c++)
             {
-                Serial.print(charArray[b][r + offsetrow][c + offsetcol]);
+                serr.print(charArray[b][r + offsetrow][c + offsetcol]);
             }
-            Serial.println("|");
+            serr.println("|");
         }
     }
 }
@@ -108,7 +108,7 @@ size_t FrameBuffer::write(uint8_t c)
 {
     if (c == '\n')
     {
-        // Serial.println("NewLine");
+        // serr.println("NewLine");
         if (cury < rows)
         {
             cury++;

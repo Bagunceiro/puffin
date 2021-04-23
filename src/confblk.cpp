@@ -1,6 +1,8 @@
-#include "confblk.h"
 #include <ArduinoJson.h>
-#include "LittleFS.h"
+#include <LittleFS.h>
+
+#include "confblk.h"
+#include "wifiserial.h"
 
 ConfBlk::ConfBlk(const String &fileName)
 {
@@ -17,17 +19,12 @@ void ConfBlk::dump(Stream &s) const
 
 bool ConfBlk::writeStream(Stream &s) const
 {
-    Serial.printf("Writing\n");
     StaticJsonDocument<512> doc;
     for (auto iterator : *this)
     {
         doc[iterator.first] = iterator.second;
     }
     serializeJson(doc, s);
-
-    String ss;
-    serializeJson(doc, ss);
-    Serial.println(ss);
 
     return true;
 }
@@ -36,12 +33,11 @@ bool ConfBlk::writeFile() const
 {
     bool result = false;
 
-    Serial.printf("opening %s\n", _fileName.c_str());
     File configFile = LittleFS.open(_fileName, "w");
     if (!configFile)
     {
         perror("");
-        Serial.println("Config file open for write failed");
+        serr.println("Config file open for write failed");
         result = false;
     }
     else
@@ -61,7 +57,7 @@ bool ConfBlk::readStream(Stream &s)
     DeserializationError error = deserializeJson(doc, s);
     if (error)
     {
-        Serial.printf("Config deserialization error (%d)\n", error.code());
+        serr.printf("Config deserialization error (%d)\n", error.code());
         result = false;
     }
     else
@@ -83,7 +79,7 @@ bool ConfBlk::readFile()
     File configFile = LittleFS.open(_fileName, "r");
     if (!configFile)
     {
-        Serial.println("Config file open for read failed");
+        serr.println("Config file open for read failed");
     }
     else
     {

@@ -3,6 +3,7 @@
 #include "analogkeypad.h"
 #include "framebuff.h"
 #include "config.h"
+#include "wifiserial.h"
 
 extern LiquidCrystal_I2C lcd;
 
@@ -115,14 +116,14 @@ void MenuEntry::build(JsonObject &obj)
   {
     /*
     for (int i = 0; i < level; i++)
-      Serial.print("  ");
-    Serial.printf("%s\n", (const char *)obj["n"]);
+      serr.print("  ");
+    serr.printf("%s\n", (const char *)obj["n"]);
     */
     strncpy(name, (const char *)obj["n"], sizeof(name) - 1);
   }
   else
   {
-    // Serial.println("No name");
+    // serr.println("No name");
   }
 
   if (obj["menu"])
@@ -184,8 +185,8 @@ void MenuEntry::buildmenu()
   DeserializationError error = deserializeJson(doc, menujson);
   if (error)
   {
-    Serial.println("menu desc deserialisation error");
-    Serial.println(error.c_str());
+    serr.println("menu desc deserialisation error");
+    serr.println(error.c_str());
   }
   JsonObject root = doc.as<JsonObject>();
   menuRoot.build(root);
@@ -194,7 +195,6 @@ void MenuEntry::buildmenu()
 
 void MenuEntry::reset()
 {
-  Serial.printf("MenuEntry::reset()");
   selected = 0;
   content = conf[leafkey];
   pos = 0;
@@ -208,8 +208,8 @@ void MenuEntry::reset()
 void MenuEntry::dump(int level)
 {
   for (int i = 0; i < level; i++)
-    Serial.print(" ");
-  Serial.printf("%s:%d key=\"%s\" content=\"%s\"\n", name, type, leafkey, content.c_str());
+    serr.print(" ");
+  serr.printf("%s:%d key=\"%s\" content=\"%s\"\n", name, type, leafkey, content.c_str());
   Menu::iterator it;
   for (MenuEntry &m : entries)
   {
@@ -416,9 +416,9 @@ void MenuEntry::dealInput(uint8_t k)
   case KEY_OK:
     while (content.endsWith(" "))
       content.remove(content.length() - 1);
-    Serial.printf("Update config %s=\"%s\"\n", leafkey, content.c_str());
+    serr.printf("Update config %s=\"%s\"\n", leafkey, content.c_str());
     conf[leafkey] = content;
-    Serial.printf("Read back: %s=\"%s\"\n", leafkey, conf[leafkey].c_str());
+    serr.printf("Read back: %s=\"%s\"\n", leafkey, conf[leafkey].c_str());
     conf.writeFile();
     navigation.pop();
     break;

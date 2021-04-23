@@ -64,7 +64,7 @@ void AnalogKeyPad::poll()
                 {
                     if (keytick(key, sincepress))
                     {
-                        // Serial.println("Suppress the keyup");
+                        // Suppress the future key up
                         suppress = true;
                     }
                 }

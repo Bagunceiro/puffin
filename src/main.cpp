@@ -20,11 +20,9 @@
 #include "framebuff.h"
 #include "analogkeypad.h"
 #include "menu.h"
-
-#define serr Serial
+#include "wifiserial.h"
 
 bool testmode = false;
-;
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 BreadCrumb navigation;
@@ -39,6 +37,7 @@ ConfBlk conf("/puffin.json");
 
 WiFiClient mqttWifiClient;
 PubSubClient mqttClient(mqttWifiClient);
+WiFiSerialClient serr;
 
 int wifiattemptcount = 0;
 const int WIFI_CONNECT_ATTEMPT_PAUSE = 15000;
@@ -69,7 +68,7 @@ void reportProgress(size_t completed, size_t total)
     {
         char buffer[8];
         snprintf(buffer, 8, "%3d%%", progress);
-        Serial.printf("%3d%% (%d/%d)\n", progress, completed, total);
+        serr.printf("%3d%% (%d/%d)\n", progress, completed, total);
         fb.writeField(5, 2, 15, buffer);
         fb.display(lcd);
         oldPhase = phase;
@@ -95,19 +94,19 @@ t_httpUpdate_return systemUpdate(const String &url)
     switch (ret)
     {
     case HTTP_UPDATE_FAILED:
-        Serial.printf("Update fail error (%d): %s\n",
+        serr.printf("Update fail error (%d): %s\n",
                       ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
         snprintf(buffer, 20, "Failed(%d)", ESPhttpUpdate.getLastError());
         fb.writeField(0, 2, 20, buffer);
         break;
 
     case HTTP_UPDATE_NO_UPDATES:
-        Serial.println("No update file available");
+        serr.println("No update file available");
         fb.writeField(0, 2, 20, "No update available");
         break;
 
     case HTTP_UPDATE_OK:
-        Serial.println("System updated");
+        serr.println("System updated");
         fb.setTitle("Reseting");
         fb.writeField(4, 2, 20, "Please Wait");
         fb.display(lcd);
@@ -428,8 +427,9 @@ void wifiloop()
             if (!wasWiFiConnected)
             {
                 wasWiFiConnected = true;
-                Serial.printf("WiFi Connected - IP %s\n", WiFi.localIP().toString().c_str());
-                Serial.printf("Connected to %s/%s\n", WiFi.SSID().c_str(), WiFi.psk().c_str());
+                serr.printf("WiFi Connected - IP %s\n", WiFi.localIP().toString().c_str());
+                serr.printf("Connected to %s/%s\n", WiFi.SSID().c_str(), WiFi.psk().c_str());
+                serr.begin("Puffin");
             }
             // mqttpoll();
         }
@@ -439,14 +439,14 @@ void wifiloop()
             unsigned long sinceThen = millis() - then;
             if ((sinceThen > 5000) || (then == 0))
             {
-                Serial.printf("Connecting to WiFi %s/%s\n", conf[ssid_n].c_str(), conf[psk_n].c_str());
+                serr.printf("Connecting to WiFi %s/%s\n", conf[ssid_n].c_str(), conf[psk_n].c_str());
                 WiFi.begin(conf[ssid_n], conf[psk_n]);
                 then = millis();
             }
             if (wasWiFiConnected)
             {
                 wasWiFiConnected = false;
-                Serial.printf("WiFi Connection lost\n");
+                serr.printf("WiFi Connection lost\n");
             }
         }
     }
@@ -469,7 +469,7 @@ void displayCharset(int set)
 
 void leafHandler(const char *key)
 {
-    Serial.printf("Leaf %s\n", key);
+    serr.printf("Leaf %s\n", key);
     if (strcmp(key, "update") == 0)
     {
         systemUpdate("http://192.168.0.101/bin/puffin.bin");
@@ -520,12 +520,12 @@ void setup()
     
     if (conf.readFile())
     {
-        Serial.println("== Config ==");
-        conf.dump(Serial);
+        serr.println("== Config ==");
+        conf.dump(serr);
     }
     else
     {
-        Serial.println("Could not open config file\n");
+        serr.println("Could not open config file\n");
     }
     Wire.begin(5, 4);
     lcd.init();
@@ -544,4 +544,5 @@ void setup()
 void loop()
 {
     ts.execute();
+    serr.loop();
 }

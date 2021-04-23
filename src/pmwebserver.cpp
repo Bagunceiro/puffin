@@ -4,9 +4,11 @@
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 
+#include "wifiserial.h"
+
 // Replace with your network credentials
-const char *ssid = "asgard_2g";
-const char *password = "enaLkraP";
+// const char *ssid = "asgard_2g";
+// const char *password = "enaLkraP";
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -18,7 +20,7 @@ String processor(const String &var)
 {
   /*
   getSensorReadings();
-  //Serial.println(var);
+  //serr.println(var);
   if(var == "TEMPERATURE"){
     return String(temperature);
   }
@@ -137,7 +139,7 @@ void wssetup()
   events.onConnect([](AsyncEventSourceClient *client) {
     if (client->lastId())
     {
-      Serial.println("Client reconnected");
+      serr.println("Client reconnected");
     }
   });
   server.addHandler(&events);
