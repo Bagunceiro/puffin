@@ -129,13 +129,13 @@ bool mqttinit()
         serr.println("Connecting to MQTT");
         lastAttempt = now;
 
-        String clientID = String("Puffin_") + String(millis() % 1000);
+        String clientID = String("puffin_") + String(millis() % 1000);
 
-        mqttClient.setServer(conf[mqttbroker_n].c_str(), 1883);
+        mqttClient.setServer(conf[mqttbroker_n].c_str(), conf[mqttport_n].toInt());
 
         if (mqttClient.connect(clientID.c_str(),
-                               "ctlr",
-                               "fatty"))
+                               conf[mqttuser_n].c_str(),
+                               conf[mqttpwd_n].c_str()))
         {
             result = true;
         }
@@ -439,6 +439,7 @@ void wifiloop()
             unsigned long sinceThen = millis() - then;
             if ((sinceThen > 5000) || (then == 0))
             {
+                Serial.printf("Connecting to WiFi %s/%s\n", conf[ssid_n].c_str(), conf[psk_n].c_str());
                 WiFi.begin(conf[ssid_n], conf[psk_n]);
                 then = millis();
             }
