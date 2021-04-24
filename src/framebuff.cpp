@@ -1,11 +1,12 @@
 #include "framebuff.h"
 
-FrameBuffer::FrameBuffer(uint8_t c, uint8_t r)
+FrameBuffer::FrameBuffer(uint8_t c, uint8_t r, uint8_t lcdaddress) : lcd(lcdaddress, c, r)
 {
     cols = c;
     rows = r;
     charArray[0] = new char *[rows];
     charArray[1] = new char *[rows];
+
 
     for (int i = 0; i < rows; i++)
     {
@@ -17,11 +18,22 @@ FrameBuffer::FrameBuffer(uint8_t c, uint8_t r)
 
     dispcols = 20;
     disprows = 4;
-    offsetrow = 0;
-    offsetcol = 0;
+    // offsetrow = 0;
+    // offsetcol = 0;
     curx = 0;
     cury = 0;
+    vcurx = -1;
+    vcurx = -1;
 }
+
+void FrameBuffer::init()
+{
+    lcd.init();
+    lcd.clear();
+    lcd.backlight();
+    lcd.display();
+}
+
 
 FrameBuffer::~FrameBuffer()
 {
@@ -43,19 +55,22 @@ void FrameBuffer::clear(uint8_t buf)
             charArray[buf][r][c] = ' '; // '0' + (c % 10);
         }
     }
-    if (clearCB) clearCB();
-    offsetrow = 0;
-    offsetcol = 0;
+    if (clearCB)
+        clearCB();
+    // offsetrow = 0;
+    // offsetcol = 0;
     curx = 0;
     cury = 0;
+    // dump();
 }
 
 /*
  * write out the current buffer where it differs from the alternative buffer
  * (ie that currently on the display) and then switch buffers.
  */
-bool FrameBuffer::display(LiquidCrystal_I2C &lcd)
+bool FrameBuffer::display()
 {
+    lcd.blink_off();
     for (int r = 0; r < disprows; r++)
     {
         if (r < rows)
@@ -64,16 +79,16 @@ bool FrameBuffer::display(LiquidCrystal_I2C &lcd)
             for (int c = 0; c < dispcols; c++)
             {
                 bool wrote = false;
-                if (((c + offsetcol) < cols) && ((r + offsetrow) < rows))
+                if (((c) < cols) && ((r) < rows))
                 {
-                    if (charArray[0][r + offsetrow][c + offsetcol] != charArray[1][r + offsetrow][c + offsetcol])
+                    if (charArray[0][r][c] != charArray[1][r][c])
                     {
                         if (!wrote)
                         {
-                            lcd.setCursor(c + offsetcol, r + offsetrow);
+                            lcd.setCursor(c, r);
                         }
-                        lcd.print(charArray[0][r + offsetrow][c + offsetcol]);
-                        charArray[1][r + offsetrow][c + offsetcol] = charArray[0][r + offsetrow][c + offsetcol];
+                        lcd.print(charArray[0][r][c]);
+                        charArray[1][r][c] = charArray[0][r][c];
                         wrote = true;
                     }
                     else
@@ -82,7 +97,28 @@ bool FrameBuffer::display(LiquidCrystal_I2C &lcd)
             }
         }
     }
+    if (vcurx >= 0)
+    {
+        lcd.setCursor(vcurx, vcury);
+        lcd.blink_on();
+    }
+    lcd.display();
     return true;
+}
+
+void FrameBuffer::visibleCursorOn(int8_t c, int8_t r)
+{
+    vcurx = c;
+    vcury = r;
+    lcd.setCursor(c, r);
+    lcd.blink_on();
+}
+
+void FrameBuffer::visibleCursorOff()
+{
+    lcd.blink_off();
+    vcurx = -1;
+    vcury = -1;
 }
 
 /*

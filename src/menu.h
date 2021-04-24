@@ -60,6 +60,7 @@ public:
     unsigned int keyset;
     unsigned int keysetpos;
     void setLeafCallback(void(*cb)(const char*)) { leafCallback = cb; }
+    void outputInput(); //:-)
 
 private:
     MenuEntryType type;

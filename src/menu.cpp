@@ -5,8 +5,6 @@
 #include "config.h"
 #include "wifiserial.h"
 
-extern LiquidCrystal_I2C lcd;
-
 MenuEntry menuRoot;
 
 #include "menujson.h"
@@ -268,18 +266,35 @@ void MenuEntry::output(FrameBuffer &fb)
   }
   break;
   }
-  fb.display(lcd);
+  fb.display();
 }
 
 void keydown(uint8_t k)
 {
 }
 
+extern LiquidCrystal_I2C lcddisplay;
+
+void MenuEntry::outputInput()
+{
+  switch (getType())
+  {
+  case TEXT_TYPE:
+  case NUM_TYPE:
+    fb.visibleCursorOn(pos,2);
+    output(fb);
+    break;
+  case MENU_TYPE:
+  default:
+    output(fb);
+    break;
+  }
+}
+
 void keyup(uint8_t k, unsigned long durn)
 {
   MenuEntry *current = NULL;
-  lcd.blink_off();
-
+  fb.visibleCursorOff();
   if (k == KEY_MENU)
   {
     if (navigation.empty())
@@ -305,22 +320,7 @@ void keyup(uint8_t k, unsigned long durn)
   if (!navigation.empty())
   {
     current = navigation.top(); // Refresh it. The above may have caused change of screen
-
-    MenuEntryType typ = current->getType();
-
-    switch (typ)
-    {
-    case TEXT_TYPE:
-    case NUM_TYPE:
-      current->output(fb);
-      lcd.setCursor(current->pos, 2);
-      lcd.blink_on();
-      break;
-    case MENU_TYPE:
-    default:
-      current->output(fb);
-      break;
-    }
+    current->outputInput();
   }
 }
 

@@ -24,11 +24,9 @@
 
 bool testmode = false;
 
-LiquidCrystal_I2C lcd(0x27, 20, 4);
 BreadCrumb navigation;
 
 PZEM004Tv30 pzem(14, 12);
-extern LiquidCrystal_I2C lcd;
 extern void wssetup();
 extern AsyncEventSource events;
 bool wifiConnected = false;
@@ -53,7 +51,7 @@ Task kpad_task(20, TASK_FOREVER, &kpadloop, &ts, true);
 Task wifi_task(5000, TASK_FOREVER, &wifiloop, &ts, true);
 Task mqtt_task(500, TASK_FOREVER, &mqttloop, &ts, true);
 
-FrameBuffer fb(20, 10);
+FrameBuffer fb(20, 10, 0x27);
 
 const char *version = __TIME__;
 
@@ -70,7 +68,7 @@ void reportProgress(size_t completed, size_t total)
         snprintf(buffer, 8, "%3d%%", progress);
         serr.printf("%3d%% (%d/%d)\n", progress, completed, total);
         fb.writeField(5, 2, 15, buffer);
-        fb.display(lcd);
+        fb.display();
         oldPhase = phase;
     }
 }
@@ -95,7 +93,7 @@ t_httpUpdate_return systemUpdate(const String &url)
     {
     case HTTP_UPDATE_FAILED:
         serr.printf("Update fail error (%d): %s\n",
-                      ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+                    ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
         snprintf(buffer, 20, "Failed(%d)", ESPhttpUpdate.getLastError());
         fb.writeField(0, 2, 20, buffer);
         break;
@@ -109,11 +107,11 @@ t_httpUpdate_return systemUpdate(const String &url)
         serr.println("System updated");
         fb.setTitle("Reseting");
         fb.writeField(4, 2, 20, "Please Wait");
-        fb.display(lcd);
+        fb.display();
         ESP.restart();
         break;
     }
-    fb.display(lcd);
+    fb.display();
     return ret;
 }
 
@@ -167,7 +165,8 @@ void mqttloop()
             }
         }
     }
-    else mqttConnected = false;
+    else
+        mqttConnected = false;
 }
 
 const char block[8] =
@@ -274,16 +273,16 @@ void displayStatus()
     switch (indic)
     {
     case 0:
-        lcd.createChar(1, working1);
+        fb.createChar(1, working1);
         break;
     case 1:
-        lcd.createChar(1, working2);
+        fb.createChar(1, working2);
         break;
     case 2:
-        lcd.createChar(1, working3);
+        fb.createChar(1, working3);
         break;
     case 3:
-        lcd.createChar(1, working4);
+        fb.createChar(1, working4);
         break;
     }
     if (++indic >= 4)
@@ -399,9 +398,10 @@ void doMeasurements()
     if (onMainScreen)
         fb.writeField(10, 3, 10, ds);
     events.send(ds, "ap power", millis());
-    if (onMainScreen) fb.setTitle("");
+    if (onMainScreen)
+        fb.setTitle("");
     displayStatus();
-    fb.display(lcd);
+    fb.display();
 }
 
 void keyup(uint8_t k, unsigned long);
@@ -464,7 +464,7 @@ void displayCharset(int set)
             fb.write(byte(start + (r * 16) + i));
         }
     }
-    fb.display(lcd);
+    fb.display();
 }
 
 void leafHandler(const char *key)
@@ -477,7 +477,7 @@ void leafHandler(const char *key)
     if (strcmp(key, "conwifi") == 0)
     {
         fb.clear();
-        fb.setCursor(0,2);
+        fb.setCursor(0, 2);
         fb.setTitle("Connecting to WiFi");
         wifi_task.enable();
     }
@@ -485,10 +485,10 @@ void leafHandler(const char *key)
     {
         WiFi.disconnect();
         fb.clear();
-        fb.setCursor(0,2);
+        fb.setCursor(0, 2);
         fb.print("WiFi disconnected");
         wifiConnected = false;
-        wifi_task.disable();      
+        wifi_task.disable();
     }
     if (strcmp(key, "reset") == 0)
     {
@@ -517,7 +517,7 @@ void setup()
     Serial.begin(9600);
     configTime(TZ_America_Sao_Paulo, "pool.ntp.org");
     LittleFS.begin();
-    
+
     if (conf.readFile())
     {
         serr.println("== Config ==");
@@ -528,17 +528,15 @@ void setup()
         serr.println("Could not open config file\n");
     }
     Wire.begin(5, 4);
-    lcd.init();
-    lcd.backlight();
     WiFi.mode(WIFI_STA);
 
-    lcd.createChar(0, antenna);
+    fb.createChar(0, antenna);
 
     menuRoot.setLeafCallback(leafHandler);
     menuRoot.buildmenu();
-    lcd.display();
     wssetup();
     fb.onClear(displayStatus);
+    fb.init();
 }
 
 void loop()
