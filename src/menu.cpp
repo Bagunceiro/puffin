@@ -281,7 +281,7 @@ void MenuEntry::outputInput()
   {
   case TEXT_TYPE:
   case NUM_TYPE:
-    fb.visibleCursorOn(pos,2);
+    fb.visibleCursorOn(pos, 2);
     output(fb);
     break;
   case MENU_TYPE:

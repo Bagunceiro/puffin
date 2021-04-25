@@ -19,6 +19,10 @@
         {
           "n": "PSK",
           "text" : "psk"
+        },
+        {
+          "n": "MDNS name",
+          "text" : "mdns"
         }
       ]
     },

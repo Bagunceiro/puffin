@@ -6,7 +6,7 @@
 #include <ESP8266httpUpdate.h>
 #include <Wire.h>
 #include <PZEM004Tv30.h>
-#include <LiquidCrystal_I2C.h>
+// #include <LiquidCrystal_I2C.h>
 #include <ArduinoJson.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
@@ -39,6 +39,8 @@ WiFiSerialClient serr;
 
 int wifiattemptcount = 0;
 const int WIFI_CONNECT_ATTEMPT_PAUSE = 15000;
+
+bool mdnsrunning = false;
 
 Scheduler ts;
 void doMeasurements();
@@ -181,6 +183,16 @@ const char block[8] =
         0b11111};
 const char antenna[8] =
     {
+        0b00100,
+        0b01110,
+        0b00100,
+        0b01110,
+        0b00100,
+        0b11111,
+        0b00100,
+        0b00000};
+/*const char antenna[8] =
+    {
         0b10101,
         0b10101,
         0b01110,
@@ -189,6 +201,8 @@ const char antenna[8] =
         0b00100,
         0b00100,
         0b00000};
+*/
+/*
 const char working1[8] =
     {
         0b11111,
@@ -229,6 +243,47 @@ const char working4[8] =
         0b00000,
         0b11111,
         0b11111};
+*/
+const char working1[8] =
+    {
+        0b00000,
+        0b00100,
+        0b00100,
+        0b00100,
+        0b00100,
+        0b00100,
+        0b00000,
+        0b00000};
+const char working2[8] =
+    {
+        0b00000,
+        0b00001,
+        0b00010,
+        0b00100,
+        0b01000,
+        0b10000,
+        0b00000,
+        0b00000};
+const char working3[8] =
+    {
+        0b00000,
+        0b00000,
+        0b00000,
+        0b11111,
+        0b00000,
+        0b00000,
+        0b00000,
+        0b00000};
+const char working4[8] =
+    {
+        0b00000,
+        0b10000,
+        0b01000,
+        0b00100,
+        0b00010,
+        0b00001,
+        0b00000,
+        0b00000};
 
 extern void checkMenu();
 extern MenuEntry menuRoot;
@@ -249,7 +304,7 @@ void displayField(const int col, const int row, const int length, const char *va
     }
 }
 
-char *sigfigs(const float val, const int figs, char *buffer)
+char *sigfigs(const float val, const int figs, const int maxndp, char *buffer)
 {
     int oom;
     if (val == 0)
@@ -261,6 +316,8 @@ char *sigfigs(const float val, const int figs, char *buffer)
     float result = roundf(val * scale) / scale;
     if (ndp < 0)
         ndp = 0;
+    else if (ndp > maxndp)
+        ndp = maxndp;
     char formatstr[6];
     sprintf(formatstr, "%%.%df", ndp);
     sprintf(buffer, formatstr, result);
@@ -293,12 +350,17 @@ void displayStatus()
     fb.write(1);
 }
 
+void getMeasurements()
+{
+}
+
 void doMeasurements()
 {
     float v;
     float a;
     float hz;
     float pf;
+    float kwh;
 
     if (!testmode)
     {
@@ -306,6 +368,7 @@ void doMeasurements()
         a = pzem.current();
         hz = pzem.frequency();
         pf = pzem.pf();
+        kwh = pzem.energy();
     }
     else
     {
@@ -313,6 +376,7 @@ void doMeasurements()
         a = (800.0 + random(300)) / 1000;
         pf = (85 + random(10)) / 100.0;
         hz = (590 + random(10)) / 10.0;
+        kwh = 0;
     }
 
     float w = v * a * pf;
@@ -330,6 +394,8 @@ void doMeasurements()
         pf = 1;
     if (isnan(va))
         va = 0;
+    if (isnan(kwh))
+        kwh = 0;
 
     char v_s[8];
     char a_s[8];
@@ -337,13 +403,15 @@ void doMeasurements()
     char hz_s[8];
     char pf_s[8];
     char va_s[8];
+    char kwh_s[8];
 
-    sigfigs(v, 4, v_s);
-    sigfigs(a, 3, a_s);
-    sigfigs(w, 3, w_s);
-    sigfigs(pf, 2, pf_s);
-    sigfigs(hz, 3, hz_s);
-    sigfigs(va, 3, va_s);
+    sigfigs(v, 4, 3, v_s);
+    sigfigs(a, 3, 3, a_s);
+    sigfigs(w, 3, 3, w_s);
+    sigfigs(pf, 2, 3, pf_s);
+    sigfigs(hz, 3, 3, hz_s);
+    sigfigs(va, 3, 3, va_s);
+    sigfigs(kwh, 3, 3, kwh_s);
 
     StaticJsonDocument<512> doc;
     doc["V"] = v_s;
@@ -352,6 +420,7 @@ void doMeasurements()
     doc["VA"] = va_s;
     doc["Hz"] = hz_s;
     doc["PF"] = pf_s;
+    doc["kWh"] = kwh_s;
     String s;
     serializeJson(doc, s);
     mqttClient.publish("powermeter/data", s.c_str());
@@ -360,13 +429,13 @@ void doMeasurements()
     char const *asuf = "A";
     if (a < 1)
     {
-        sigfigs(a * 1000, 3, a_s);
+        sigfigs(a * 1000, 3, 3, a_s);
         asuf = "mA";
     }
     char const *wsuf = "W";
     if (w < 1)
     {
-        sigfigs(w * 1000, 3, w_s);
+        sigfigs(w * 1000, 3, 3, w_s);
         wsuf = "mW";
     }
 
@@ -374,30 +443,41 @@ void doMeasurements()
 
     char ds[12];
     const char *fmt = "%6s %s";
+    const char *fmt2 = "%5s %s";
+
     snprintf(ds, 10, fmt, v_s, "V");
     if (onMainScreen)
         fb.writeField(0, 1, 10, ds);
     events.send(ds, "voltage", millis());
+
     snprintf(ds, 10, fmt, a_s, asuf);
     if (onMainScreen)
         fb.writeField(0, 2, 10, ds);
     events.send(ds, "current", millis());
+
     snprintf(ds, 10, fmt, w_s, wsuf);
     if (onMainScreen)
         fb.writeField(0, 3, 10, ds);
     events.send(ds, "power", millis());
+
     snprintf(ds, 10, fmt, hz_s, "Hz");
     if (onMainScreen)
         fb.writeField(10, 1, 10, ds);
     events.send(ds, "frequency", millis());
+
     snprintf(ds, 10, fmt, pf_s, "PF");
     if (onMainScreen)
         fb.writeField(10, 2, 10, ds);
     events.send(ds, "power factor", millis());
+
     snprintf(ds, 10, fmt, va_s, "VA");
     if (onMainScreen)
         fb.writeField(10, 3, 10, ds);
     events.send(ds, "ap power", millis());
+
+    snprintf(ds, 10, fmt2, kwh_s, "kWh");
+    events.send(ds, "energy", millis());
+
     if (onMainScreen)
         fb.setTitle("");
     displayStatus();
@@ -427,6 +507,11 @@ void wifiloop()
             if (!wasWiFiConnected)
             {
                 wasWiFiConnected = true;
+                if (conf[mdns_n].length())
+                {
+                    mdnsrunning = true;
+                    MDNS.begin(conf[mdns_n]);
+                }
                 serr.printf("WiFi Connected - IP %s\n", WiFi.localIP().toString().c_str());
                 serr.printf("Connected to %s/%s\n", WiFi.SSID().c_str(), WiFi.psk().c_str());
                 serr.begin("Puffin");
@@ -447,6 +532,7 @@ void wifiloop()
             {
                 wasWiFiConnected = false;
                 serr.printf("WiFi Connection lost\n");
+                mdnsrunning = false;
             }
         }
     }
@@ -516,6 +602,7 @@ void setup()
 {
     Serial.begin(9600);
     configTime(TZ_America_Sao_Paulo, "pool.ntp.org");
+    pzem.resetEnergy();
     LittleFS.begin();
 
     if (conf.readFile())
@@ -543,4 +630,6 @@ void loop()
 {
     ts.execute();
     serr.loop();
+    if (mdnsrunning)
+        MDNS.update();
 }

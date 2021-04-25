@@ -75,6 +75,9 @@ const char index_html[] PROGMEM = R"rawliteral(
       <div class="card">
         <p>APPARENT POWER</p><p><span class="reading"><span id="ap power">%AP POWER%</span></span></p>
       </div>
+      <div class="card">
+        <p>Energy</p><p><span class="reading"><span id="energy">%ENERGY%</span></span></p>
+      </div>
     </div>
   </div>
 <script>
@@ -122,6 +125,11 @@ if (!!window.EventSource) {
  source.addEventListener('ap power', function(e) {
   console.log("ap power", e.data);
   document.getElementById("ap power").innerHTML = e.data;
+ }, false);
+
+  source.addEventListener('energy', function(e) {
+  console.log("energy", e.data);
+  document.getElementById("energy").innerHTML = e.data;
  }, false);
 }
 </script>

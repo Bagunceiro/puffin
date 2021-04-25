@@ -21,6 +21,10 @@ const char *menujson =
         {
           "n": "PSK",
           "text" : "psk"
+        },
+        {
+          "n": "MDNS name",
+          "text" : "mdns"
         }
       ]
     },

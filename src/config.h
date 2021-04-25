@@ -10,3 +10,4 @@ extern const char *mqttbroker_n;
 extern const char *mqttport_n;
 extern const char *mqttuser_n;
 extern const char *mqttpwd_n;
+extern const char *mdns_n;
